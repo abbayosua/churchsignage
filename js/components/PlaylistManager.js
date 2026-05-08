@@ -2,160 +2,166 @@ const PlaylistManager = {
     name: 'PlaylistManager',
     template: `
         <div>
-            <div class="page-header">
-                <h2>Playlists</h2>
-                <button class="btn btn-primary" @click="showCreate = true">+ New Playlist</button>
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="fw-bold mb-0">Playlists</h4>
+                <button class="btn btn-primary btn-sm" @click="openCreate"><i class="bi bi-plus-lg me-1"></i>New Playlist</button>
             </div>
 
-            <div v-if="loading" class="empty-state">Loading...</div>
-            <div v-else-if="playlists.length === 0" class="empty-state">
-                <div class="icon">&#127916;</div>
+            <div v-if="loading" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+            <div v-else-if="playlists.length === 0" class="text-center py-5 text-muted">
+                <i class="bi bi-playlist display-1 d-block mb-3" style="opacity:0.3"></i>
                 <p>No playlists yet</p>
-                <button class="btn btn-primary" @click="showCreate = true">Create your first playlist</button>
+                <button class="btn btn-primary" @click="openCreate">Create your first playlist</button>
             </div>
-            <div v-else>
-                <div class="card" v-for="p in playlists" :key="p.id">
-                    <div class="card-header">
-                        <div>
-                            <h3>{{ p.name }}</h3>
-                            <span style="font-size:12px;color:var(--text-muted)">
-                                {{ p.item_count }} items &middot;
-                                <span :class="'badge badge-' + (p.status === 'active' ? 'success' : 'warning')">{{ p.status }}</span>
-                            </span>
+            <div v-else class="row g-3">
+                <div v-for="p in playlists" :key="p.id" class="col-md-6 col-lg-4">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="fw-bold mb-0">{{ p.name }}</h6>
+                                <span :class="'badge bg-' + (p.status === 'active' ? 'success' : 'warning')">{{ p.status }}</span>
+                            </div>
+                            <small class="text-muted">{{ p.item_count }} items &middot; {{ p.default_duration }}s default &middot; {{ p.transition }}</small>
                         </div>
-                        <div style="display:flex;gap:6px">
-                            <button class="btn btn-outline btn-sm" @click="editPlaylist(p)">Edit</button>
-                            <button class="btn btn-danger btn-sm" @click="deletePlaylist(p)">Delete</button>
+                        <div class="card-footer bg-white border-0 d-flex gap-2 pt-0">
+                            <button class="btn btn-outline-primary btn-sm flex-fill" @click="editPlaylist(p)"><i class="bi bi-pencil me-1"></i>Edit</button>
+                            <button class="btn btn-outline-danger btn-sm flex-fill" @click="deletePlaylist(p)"><i class="bi bi-trash me-1"></i>Delete</button>
                         </div>
-                    </div>
-                    <div v-if="p.item_count > 0" style="font-size:13px;color:var(--text-muted)">
-                        {{ p.default_duration }}s default duration &middot; {{ p.transition }} transition
                     </div>
                 </div>
             </div>
 
-            <div v-if="showCreate" class="modal-overlay" @click.self="showCreate = false">
-                <div class="modal" style="max-width:450px">
-                    <div class="modal-header">
-                        <h3>New Playlist</h3>
-                        <button class="close-btn" @click="showCreate = false">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="form-group">
-                            <label>Name</label>
-                            <input class="form-control" v-model="newName" placeholder="Sunday Service" autofocus>
+            <div v-if="showCreate" class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="bi bi-plus-circle me-1"></i>New Playlist</h5>
+                            <button class="btn-close" @click="showCreate = false"></button>
                         </div>
-                        <div class="form-group">
-                            <label>Default Duration (seconds)</label>
-                            <input class="form-control" type="number" v-model.number="newDuration" min="3" max="300">
-                        </div>
-                        <div class="form-group">
-                            <label>Transition</label>
-                            <select class="form-control" v-model="newTransition">
-                                <option value="fade">Fade</option>
-                                <option value="crossfade">Crossfade</option>
-                                <option value="slide">Slide</option>
-                                <option value="none">None</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-outline" @click="showCreate = false">Cancel</button>
-                        <button class="btn btn-primary" @click="createPlaylist" :disabled="!newName.trim()">Create</button>
-                    </div>
-                </div>
-            </div>
-
-            <div v-if="editing" class="modal-overlay" @click.self="closeEditor">
-                <div class="modal" style="max-width:800px">
-                    <div class="modal-header">
-                        <h3>Edit: {{ editing.name }}</h3>
-                        <button class="close-btn" @click="closeEditor">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="two-col">
-                            <div>
-                                <div class="form-group">
-                                    <label>Name</label>
-                                    <input class="form-control" v-model="editForm.name">
-                                </div>
-                                <div class="form-group">
-                                    <label>Default Duration (s)</label>
-                                    <input class="form-control" type="number" v-model.number="editForm.default_duration" min="3">
-                                </div>
-                                <div class="form-group">
-                                    <label>Background Color</label>
-                                    <input class="form-control" type="color" v-model="editForm.bg_color">
-                                </div>
-                                <div class="form-group">
-                                    <label>Status</label>
-                                    <select class="form-control" v-model="editForm.status">
-                                        <option value="draft">Draft</option>
-                                        <option value="active">Active</option>
-                                    </select>
-                                </div>
-                                <button class="btn btn-primary btn-sm" @click="saveSettings" :disabled="saving">
-                                    {{ saving ? 'Saving...' : 'Save Settings' }}
-                                </button>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold text-muted">Name</label>
+                                <input class="form-control" v-model="newName" placeholder="Sunday Service" autofocus>
                             </div>
-                            <div>
-                                <h4 style="margin-bottom:12px;font-size:14px;">Media Items</h4>
-                                <p v-if="editing.items.length === 0" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">
-                                    No items. Select media below to add.
-                                </p>
-                                <ul class="item-list" v-else>
-                                    <li v-for="(item, idx) in editing.items" :key="idx"
-                                        draggable="true"
-                                        @dragstart="dragStartIdx = idx"
-                                        @dragover.prevent="dragOverIdx = idx"
-                                        @drop="dropItem"
-                                        :class="{ dragging: dragStartIdx === idx }">
-                                        <span class="drag-handle">&#9776;</span>
-                                        <img class="thumb-sm" :src="item.url" @error="handleImgErr">
-                                        <div class="item-info">
-                                            <div class="item-name">{{ item.media_name }}</div>
-                                            <div class="item-meta">{{ item.media_type }} &middot; {{ item.duration_override || editForm.default_duration }}s</div>
-                                        </div>
-                                        <input class="form-control" type="number" v-model.number="item.duration_override"
-                                               placeholder="dur" min="1" style="width:60px;font-size:12px;padding:4px 6px;">
-                                        <button class="btn btn-danger btn-sm" @click="removeItem(idx)">&times;</button>
-                                    </li>
-                                </ul>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold text-muted">Default Duration (seconds)</label>
+                                <input class="form-control" type="number" v-model.number="newDuration" min="3" max="300">
                             </div>
-                        </div>
-                        <hr style="margin:16px 0;border-color:var(--border)">
-                        <div>
-                            <h4 style="margin-bottom:12px;font-size:14px;">Add Media</h4>
-                            <div class="media-grid" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr))">
-                                <div class="media-item" v-for="m in availableMedia" :key="m.id"
-                                     @click="addItem(m)" style="cursor:pointer">
-                                    <img class="thumb" :src="m.thumbnail_url || m.url" style="height:80px" @error="handleImgErr">
-                                    <div class="info" style="padding:4px 6px">
-                                        <div class="name" style="font-size:11px">{{ m.name }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <button class="btn btn-success btn-sm" style="margin-top:12px" @click="saveItems" :disabled="saving">
-                                {{ saving ? 'Saving...' : 'Save Items Order' }}
-                            </button>
-                        </div>
-
-                        <hr style="margin:16px 0;border-color:var(--border)">
-                        <div>
-                            <h4 style="margin-bottom:12px;font-size:14px;">Assign to Devices</h4>
-                            <div class="form-group">
-                                <label>Device</label>
-                                <select class="form-control" v-model="assignDeviceId">
-                                    <option value="">-- Select Device --</option>
-                                    <option value="all">All Devices</option>
-                                    <option v-for="d in devices" :key="d.id" :value="d.id">{{ d.name }}</option>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold text-muted">Transition</label>
+                                <select class="form-select" v-model="newTransition">
+                                    <option value="fade">Fade</option>
+                                    <option value="crossfade">Crossfade</option>
+                                    <option value="slide">Slide</option>
+                                    <option value="none">None</option>
                                 </select>
                             </div>
-                            <button class="btn btn-primary btn-sm" @click="assignPlaylist" :disabled="!assignDeviceId || saving">
-                                {{ saving ? 'Assigning...' : 'Assign' }}
-                            </button>
-                            <div v-if="editing.assignments && editing.assignments.length > 0" style="margin-top:12px;font-size:13px;color:var(--text-muted)">
-                                Assigned to: {{ editing.assignments.map(a => a.device_name || 'All Devices').join(', ') }}
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-outline-secondary" @click="showCreate = false">Cancel</button>
+                            <button class="btn btn-primary" @click="createPlaylist" :disabled="!newName.trim()">Create</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="editing" class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+                <div class="modal-dialog modal-xl modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="bi bi-pencil-square me-1"></i>Edit: {{ editing.name }}</h5>
+                            <button class="btn-close" @click="closeEditor"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-5">
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-semibold text-muted">Name</label>
+                                        <input class="form-control" v-model="editForm.name">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-semibold text-muted">Default Duration (s)</label>
+                                        <input class="form-control" type="number" v-model.number="editForm.default_duration" min="3">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-semibold text-muted">Background Color</label>
+                                        <input class="form-control form-control-color" type="color" v-model="editForm.bg_color" style="padding:2px;height:38px">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-semibold text-muted">Status</label>
+                                        <select class="form-select" v-model="editForm.status">
+                                            <option value="draft">Draft</option>
+                                            <option value="active">Active</option>
+                                        </select>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" @click="saveSettings" :disabled="saving">
+                                        <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+                                        {{ saving ? 'Saving...' : 'Save Settings' }}
+                                    </button>
+                                </div>
+                                <div class="col-md-7">
+                                    <h6 class="fw-semibold mb-2">Media Items</h6>
+                                    <p v-if="editing.items.length === 0" class="text-muted small">No items. Select media below to add.</p>
+                                    <div v-else class="list-group mb-3">
+                                        <div v-for="(item, idx) in editing.items" :key="idx"
+                                             class="list-group-item list-group-item-action d-flex align-items-center gap-2 p-2"
+                                             draggable="true"
+                                             @dragstart="dragStartIdx = idx"
+                                             @dragover.prevent="dragOverIdx = idx"
+                                             @drop="dropItem"
+                                             :class="{ 'opacity-50': dragStartIdx === idx }">
+                                            <span class="drag-handle"><i class="bi bi-grip-vertical"></i></span>
+                                            <img class="rounded" :src="item.url" style="width:48px;height:36px;object-fit:cover" @error="handleImgErr">
+                                            <div class="flex-grow-1 min-width-0">
+                                                <small class="d-block text-truncate fw-semibold">{{ item.media_name }}</small>
+                                                <small class="text-muted">{{ item.media_type }} &middot; {{ item.duration_override || editForm.default_duration }}s</small>
+                                            </div>
+                                            <input class="form-control form-control-sm" type="number" v-model.number="item.duration_override"
+                                                   placeholder="dur" min="1" style="width:60px">
+                                            <button class="btn btn-outline-danger btn-sm p-1 lh-1" @click="removeItem(idx)"><i class="bi bi-x"></i></button>
+                                        </div>
+                                    </div>
+
+                                    <h6 class="fw-semibold mb-2">Add Media</h6>
+                                    <div class="row g-2" style="max-height:200px;overflow-y:auto">
+                                        <div v-for="m in availableMedia" :key="m.id" class="col-4 col-md-3"
+                                             @click="addItem(m)" style="cursor:pointer">
+                                            <div class="card border-0 shadow-sm">
+                                                <img class="card-img-top" :src="m.thumbnail_url || m.url" style="height:60px;object-fit:cover" @error="handleImgErr">
+                                                <div class="p-1">
+                                                    <small class="d-block text-truncate">{{ m.name }}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button class="btn btn-success btn-sm mt-2" @click="saveItems" :disabled="saving">
+                                        <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+                                        {{ saving ? 'Saving...' : 'Save Items' }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <hr>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="fw-semibold mb-2">Assign to Devices</h6>
+                                    <div class="mb-2">
+                                        <select class="form-select" v-model="assignDeviceId">
+                                            <option value="">-- Select Device --</option>
+                                            <option value="all">All Devices</option>
+                                            <option v-for="d in devices" :key="d.id" :value="d.id">{{ d.name }}</option>
+                                        </select>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" @click="assignPlaylist" :disabled="!assignDeviceId || saving">
+                                        {{ saving ? 'Assigning...' : 'Assign' }}
+                                    </button>
+                                    <div v-if="editing.assignments && editing.assignments.length > 0" class="mt-2 small text-muted">
+                                        <i class="bi bi-check-circle text-success me-1"></i>
+                                        Assigned to: {{ editing.assignments.map(a => a.device_name || 'All Devices').join(', ') }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -182,10 +188,11 @@ const PlaylistManager = {
             catch (e) { alert('Error: ' + e.message); }
             finally { this.loading = false; }
         },
+        openCreate() { this.showCreate = true; this.newName = ''; this.newDuration = 10; this.newTransition = 'fade'; },
         async createPlaylist() {
             try {
                 await api.post('/playlists', { name: this.newName.trim(), default_duration: this.newDuration, transition: this.newTransition });
-                this.showCreate = false; this.newName = '';
+                this.showCreate = false;
                 await this.loadPlaylists();
             } catch (e) { alert('Error: ' + e.message); }
         },
@@ -211,7 +218,7 @@ const PlaylistManager = {
         closeEditor() { this.editing = null; this.editForm = {}; this.loadPlaylists(); },
         async saveSettings() {
             this.saving = true;
-            try { await api.put('/playlists/' + this.editing.id, this.editForm); alert('Settings saved'); }
+            try { await api.put('/playlists/' + this.editing.id, this.editForm); }
             catch (e) { alert('Error: ' + e.message); }
             finally { this.saving = false; }
         },
@@ -232,7 +239,6 @@ const PlaylistManager = {
             try {
                 const items = this.editing.items.map((item, idx) => ({ media_id: item.media_id, duration_override: item.duration_override || null }));
                 await api.post('/playlists/' + this.editing.id + '/items', { items });
-                alert('Items saved');
             } catch (e) { alert('Error: ' + e.message); }
             finally { this.saving = false; }
         },
@@ -241,7 +247,6 @@ const PlaylistManager = {
             try {
                 const payload = this.assignDeviceId === 'all' ? { all_devices: true } : { device_ids: [parseInt(this.assignDeviceId)] };
                 await api.post('/playlists/' + this.editing.id + '/assign', payload);
-                alert('Playlist assigned');
                 const res = await api.get('/playlists/' + this.editing.id);
                 this.editing.assignments = res.data.assignments;
             } catch (e) { alert('Error: ' + e.message); }

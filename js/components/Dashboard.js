@@ -2,82 +2,98 @@ const Dashboard = {
     name: 'Dashboard',
     template: `
         <div>
-            <div class="page-header">
-                <h2>Dashboard</h2>
+            <h4 class="mb-4 fw-bold">Dashboard</h4>
+            <div v-if="loading" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
             </div>
-            <div v-if="loading" class="empty-state">Loading...</div>
             <div v-else>
-                <div class="grid grid-4">
-                    <div class="card stat-card">
-                        <div class="value">{{ stats.total_media || 0 }}</div>
-                        <div class="label">Total Media</div>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3 col-6">
+                        <div class="card border-0 shadow-sm text-center p-3">
+                            <div class="stat-value">{{ stats.total_media || 0 }}</div>
+                            <div class="text-muted small">Total Media</div>
+                        </div>
                     </div>
-                    <div class="card stat-card">
-                        <div class="value">{{ stats.active_playlists || 0 }}</div>
-                        <div class="label">Active Playlists</div>
+                    <div class="col-md-3 col-6">
+                        <div class="card border-0 shadow-sm text-center p-3">
+                            <div class="stat-value">{{ stats.active_playlists || 0 }}</div>
+                            <div class="text-muted small">Active Playlists</div>
+                        </div>
                     </div>
-                    <div class="card stat-card">
-                        <div class="value">{{ stats.online_devices || 0 }}</div>
-                        <div class="label">Online Devices</div>
+                    <div class="col-md-3 col-6">
+                        <div class="card border-0 shadow-sm text-center p-3">
+                            <div class="stat-value">{{ stats.online_devices || 0 }}</div>
+                            <div class="text-muted small">Online Devices</div>
+                        </div>
                     </div>
-                    <div class="card stat-card">
-                        <div class="value">{{ stats.total_devices || 0 }}</div>
-                        <div class="label">Total Devices</div>
+                    <div class="col-md-3 col-6">
+                        <div class="card border-0 shadow-sm text-center p-3">
+                            <div class="stat-value">{{ stats.total_devices || 0 }}</div>
+                            <div class="text-muted small">Total Devices</div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="two-col">
-                    <div class="card">
-                        <div class="card-header"><h3>Recent Media</h3></div>
-                        <div v-if="recentMedia.length === 0" class="empty-state" style="padding:20px">
-                            No media uploaded yet
-                        </div>
-                        <div class="media-grid" v-else>
-                            <div class="media-item" v-for="m in recentMedia" :key="m.id"
-                                 @click="previewUrl = m.url">
-                                <span class="type-badge">{{ m.type }}</span>
-                                <img class="thumb" :src="m.thumbnail_url || m.url" :alt="m.name"
-                                     @error="handleImgErr">
-                                <div class="info">
-                                    <div class="name">{{ m.name }}</div>
-                                    <div class="meta">{{ (m.size / 1024 / 1024).toFixed(1) }} MB</div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-white fw-semibold">Recent Media</div>
+                            <div class="card-body">
+                                <div v-if="recentMedia.length === 0" class="text-muted small py-3 text-center">No media uploaded yet</div>
+                                <div v-else class="row g-2">
+                                    <div class="col-4 col-md-3" v-for="m in recentMedia" :key="m.id" style="cursor:pointer"
+                                         @click="previewUrl = m.url" title="Click to preview">
+                                        <div class="card border-0 shadow-sm media-item">
+                                            <img class="media-thumb rounded" :src="m.thumbnail_url || m.url" :alt="m.name"
+                                                 @error="handleImgErr">
+                                            <div class="p-1">
+                                                <small class="d-block text-truncate fw-semibold">{{ m.name }}</small>
+                                                <small class="text-muted">{{ (m.size / 1024 / 1024).toFixed(1) }} MB</small>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="card">
-                        <div class="card-header"><h3>Device Status</h3></div>
-                        <div v-if="devices.length === 0" class="empty-state" style="padding:20px">
-                            No devices registered
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow-sm">
+                            <div class="card-header bg-white fw-semibold">Device Status</div>
+                            <div class="card-body p-0">
+                                <div v-if="devices.length === 0" class="text-muted small py-3 text-center">No devices registered</div>
+                                <table v-else class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr><th>Device</th><th>Status</th><th>Last Seen</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="d in devices" :key="d.id">
+                                            <td class="fw-semibold">{{ d.name }}</td>
+                                            <td>
+                                                <span :class="'badge bg-' + (d.is_online ? 'success' : 'danger')">
+                                                    {{ d.is_online ? 'Online' : 'Offline' }}
+                                                </span>
+                                            </td>
+                                            <td class="text-muted small">{{ d.last_heartbeat ? timeAgo(d.last_heartbeat) : 'Never' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                        <table v-else>
-                            <thead>
-                                <tr><th>Device</th><th>Status</th><th>Last Seen</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="d in devices" :key="d.id">
-                                    <td>{{ d.name }}</td>
-                                    <td>
-                                        <span :class="'status-dot ' + (d.is_online ? 'online' : 'offline')"></span>
-                                        {{ d.is_online ? 'Online' : 'Offline' }}
-                                    </td>
-                                    <td>{{ d.last_heartbeat ? timeAgo(d.last_heartbeat) : 'Never' }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
                     </div>
                 </div>
 
-                <div v-if="previewUrl" class="modal-overlay" @click.self="previewUrl = null">
-                    <div class="modal" style="max-width:800px">
-                        <div class="modal-header">
-                            <h3>Preview</h3>
-                            <button class="close-btn" @click="previewUrl = null">&times;</button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="preview-box">
-                                <img v-if="isImage(previewUrl)" :src="previewUrl" style="max-width:100%;max-height:70vh">
-                                <video v-else :src="previewUrl" controls style="max-width:100%;max-height:70vh"></video>
+                <div v-if="previewUrl" class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+                    <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Preview</h5>
+                                <button class="btn-close" @click="previewUrl = null"></button>
+                            </div>
+                            <div class="modal-body p-0">
+                                <div class="preview-box rounded-0" style="aspect-ratio:16/9">
+                                    <img v-if="isImage(previewUrl)" :src="previewUrl" class="mw-100 mh-100">
+                                    <video v-else :src="previewUrl" controls class="mw-100 mh-100"></video>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -2,96 +2,113 @@ const MediaManager = {
     name: 'MediaManager',
     template: `
         <div>
-            <div class="page-header">
-                <h2>Media Library</h2>
-                <div style="display:flex;gap:8px;align-items:center">
-                    <select class="form-control" v-model="filterType" @change="loadMedia" style="width:auto">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4 class="fw-bold mb-0">Media Library</h4>
+                <div class="d-flex gap-2 align-items-center">
+                    <select class="form-select form-select-sm" v-model="filterType" @change="loadMedia" style="width:auto">
                         <option value="">All Types</option>
                         <option value="image">Images</option>
                         <option value="video">Videos</option>
                         <option value="gif">GIFs</option>
                     </select>
-                    <input class="form-control" v-model="searchQuery" @input="debounceSearch" placeholder="Search..." style="width:200px">
-                    <button class="btn btn-primary" @click="showUpload = true">+ Upload</button>
+                    <input class="form-control form-control-sm" v-model="searchQuery" @input="debounceSearch" placeholder="Search..." style="width:180px">
+                    <button class="btn btn-primary btn-sm" @click="showUpload = true"><i class="bi bi-upload me-1"></i>Upload</button>
                 </div>
             </div>
 
-            <div v-if="loading" class="empty-state">Loading media...</div>
-            <div v-else-if="media.length === 0" class="empty-state">
-                <div class="icon">&#128247;</div>
+            <div v-if="loading" class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+            <div v-else-if="media.length === 0" class="text-center py-5 text-muted">
+                <i class="bi bi-images display-1 d-block mb-3" style="opacity:0.3"></i>
                 <p>No media files yet</p>
                 <button class="btn btn-primary" @click="showUpload = true">Upload your first file</button>
             </div>
-            <div v-else class="media-grid">
-                <div class="media-item" v-for="m in media" :key="m.id" @click="preview(m)">
-                    <span class="type-badge">{{ m.type }}</span>
-                    <div class="actions">
-                        <button class="btn" @click.stop="preview(m)" title="Preview">&#128065;</button>
-                        <button class="btn" @click.stop="deleteMedia(m)" title="Delete">&times;</button>
-                    </div>
-                    <img class="thumb" :src="m.thumbnail_url || m.url" :alt="m.name"
-                         @error="handleImgErr">
-                    <div class="info">
-                        <div class="name">{{ m.name }}</div>
-                        <div class="meta">{{ (m.size / 1024).toFixed(0) }} KB &middot; {{ m.width }}x{{ m.height }}</div>
+            <div v-else class="row g-3">
+                <div v-for="m in media" :key="m.id" class="col-6 col-md-4 col-lg-3 col-xl-2">
+                    <div class="card border-0 shadow-sm media-item" @click="preview(m)">
+                        <div class="position-relative">
+                            <img class="media-thumb rounded-top" :src="m.thumbnail_url || m.url" :alt="m.name" @error="handleImgErr">
+                            <span class="position-absolute top-0 start-0 badge bg-dark bg-opacity-75 m-1 text-uppercase" style="font-size:10px">{{ m.type }}</span>
+                            <div class="position-absolute top-0 end-0 m-1 d-flex gap-1" style="display:none">
+                                <button class="btn btn-sm btn-dark p-1 lh-1" @click.stop="preview(m)" title="Preview"><i class="bi bi-eye"></i></button>
+                                <button class="btn btn-sm btn-danger p-1 lh-1" @click.stop="deleteMedia(m)" title="Delete"><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="p-2">
+                            <small class="d-block text-truncate fw-semibold">{{ m.name }}</small>
+                            <small class="text-muted">{{ (m.size / 1024).toFixed(0) }} KB &middot; {{ m.width }}x{{ m.height }}</small>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div v-if="totalPages > 1" style="display:flex;justify-content:center;gap:8px;margin-top:20px">
-                <button class="btn btn-outline btn-sm" :disabled="page <= 1" @click="goPage(page - 1)">Previous</button>
-                <span style="padding:6px 12px;font-size:13px">Page {{ page }} of {{ totalPages }}</span>
-                <button class="btn btn-outline btn-sm" :disabled="page >= totalPages" @click="goPage(page + 1)">Next</button>
-            </div>
+            <nav v-if="totalPages > 1" class="mt-4 d-flex justify-content-center">
+                <ul class="pagination pagination-sm">
+                    <li class="page-item" :class="{ disabled: page <= 1 }">
+                        <button class="page-link" @click="goPage(page - 1)">Previous</button>
+                    </li>
+                    <li class="page-item disabled"><span class="page-link">Page {{ page }} of {{ totalPages }}</span></li>
+                    <li class="page-item" :class="{ disabled: page >= totalPages }">
+                        <button class="page-link" @click="goPage(page + 1)">Next</button>
+                    </li>
+                </ul>
+            </nav>
 
-            <div v-if="showUpload" class="modal-overlay" @click.self="closeUpload">
-                <div class="modal">
-                    <div class="modal-header">
-                        <h3>Upload Media</h3>
-                        <button class="close-btn" @click="closeUpload">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="upload-zone" @click="$refs.fileInput.click()"
-                             @dragover.prevent="$event.target.classList.add('dragover')"
-                             @dragleave.prevent="$event.target.classList.remove('dragover')"
-                             @drop.prevent="handleDrop">
-                            <p v-if="!uploadFile">Click or drag & drop files here</p>
-                            <p v-else><strong>{{ uploadFile.name }}</strong> ({{ (uploadFile.size / 1024).toFixed(0) }} KB)</p>
-                            <input type="file" ref="fileInput" @change="handleFile" accept="image/*,video/*">
+            <div v-if="showUpload" class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="bi bi-upload me-1"></i>Upload Media</h5>
+                            <button class="btn-close" @click="closeUpload"></button>
                         </div>
-                        <div class="form-group" style="margin-top:16px">
-                            <label>Name (optional)</label>
-                            <input class="form-control" v-model="uploadName" placeholder="Auto from filename">
+                        <div class="modal-body">
+                            <div class="upload-zone" @click="$refs.fileInput.click()"
+                                 @dragover.prevent="$event.target.classList.add('border-primary')"
+                                 @dragleave.prevent="$event.target.classList.remove('border-primary')"
+                                 @drop.prevent="handleDrop">
+                                <i class="bi bi-cloud-arrow-up display-5 d-block mb-2" style="opacity:0.4"></i>
+                                <p class="mb-0" v-if="!uploadFile">Click or drag & drop files here</p>
+                                <p class="mb-0 fw-semibold" v-else>{{ uploadFile.name }} <small class="text-muted">({{ (uploadFile.size / 1024).toFixed(0) }} KB)</small></p>
+                                <input type="file" ref="fileInput" @change="handleFile" accept="image/*,video/*" class="d-none">
+                            </div>
+                            <div class="mt-3">
+                                <label class="form-label small fw-semibold text-muted">Name (optional)</label>
+                                <input class="form-control" v-model="uploadName" placeholder="Auto from filename">
+                            </div>
+                            <div class="mt-2">
+                                <label class="form-label small fw-semibold text-muted">Category</label>
+                                <select class="form-select" v-model="uploadCategory">
+                                    <option value="">None</option>
+                                    <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Category</label>
-                            <select class="form-control" v-model="uploadCategory">
-                                <option value="">None</option>
-                                <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-                            </select>
+                        <div class="modal-footer">
+                            <button class="btn btn-outline-secondary" @click="closeUpload">Cancel</button>
+                            <button class="btn btn-primary" @click="doUpload" :disabled="!uploadFile || uploading">
+                                <span v-if="uploading" class="spinner-border spinner-border-sm me-1"></span>
+                                {{ uploading ? 'Uploading...' : 'Upload' }}
+                            </button>
                         </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button class="btn btn-outline" @click="closeUpload">Cancel</button>
-                        <button class="btn btn-primary" @click="doUpload" :disabled="!uploadFile || uploading">
-                            {{ uploading ? 'Uploading...' : 'Upload' }}
-                        </button>
                     </div>
                 </div>
             </div>
 
-            <div v-if="previewItem" class="modal-overlay" @click.self="closePreview">
-                <div class="modal" style="max-width:800px">
-                    <div class="modal-header">
-                        <h3>{{ previewItem.name }}</h3>
-                        <button class="close-btn" @click="closePreview">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="preview-box">
-                            <img v-if="previewItem.type === 'image' || previewItem.type === 'gif'" :src="previewItem.url" style="max-width:100%;max-height:70vh">
-                            <video v-else :src="previewItem.url" controls style="max-width:100%;max-height:70vh"></video>
+            <div v-if="previewItem" class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">{{ previewItem.name }}</h5>
+                            <button class="btn-close" @click="closePreview"></button>
                         </div>
-                        <div style="margin-top:12px;font-size:13px;color:var(--text-muted)">
+                        <div class="modal-body p-0">
+                            <div class="preview-box rounded-0" style="aspect-ratio:16/9">
+                                <img v-if="previewItem.type === 'image' || previewItem.type === 'gif'" :src="previewItem.url" class="mw-100 mh-100">
+                                <video v-else :src="previewItem.url" controls class="mw-100 mh-100"></video>
+                            </div>
+                        </div>
+                        <div class="modal-footer small text-muted d-block">
                             {{ previewItem.width }}x{{ previewItem.height }} &middot;
                             {{ (previewItem.size / 1024 / 1024).toFixed(2) }} MB &middot;
                             {{ previewItem.mime }}
@@ -127,7 +144,7 @@ const MediaManager = {
                 this.media = res.data.items;
                 this.totalPages = res.data.total_pages;
             } catch (e) {
-                alert('Error loading media: ' + e.message);
+                alert('Error: ' + e.message);
             } finally {
                 this.loading = false;
             }
@@ -145,7 +162,7 @@ const MediaManager = {
             if (file) { this.uploadFile = file; if (!this.uploadName) this.uploadName = file.name.replace(/\.[^.]+$/, ''); }
         },
         handleDrop(e) {
-            e.target.classList.remove('dragover');
+            e.target.classList.remove('border-primary');
             const file = e.dataTransfer.files[0];
             if (file) { this.uploadFile = file; if (!this.uploadName) this.uploadName = file.name.replace(/\.[^.]+$/, ''); }
         },
@@ -175,7 +192,7 @@ const MediaManager = {
         async deleteMedia(m) {
             if (!confirm('Delete "' + m.name + '"?')) return;
             try { await api.delete('/media/' + m.id); await this.loadMedia(); }
-            catch (e) { alert('Delete failed: ' + e.message); }
+            catch (e) { alert('Error: ' + e.message); }
         }
     }
 };

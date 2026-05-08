@@ -2,15 +2,11 @@ const { chromium } = require('playwright');
 
 const BASE = 'http://localhost/churchsignage';
 
-function sleep(ms) {
-    return new Promise(r => setTimeout(r, ms));
-}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 (async () => {
-    let browser;
-    let page;
-    let passed = 0;
-    let failed = 0;
+    let browser, page;
+    let passed = 0, failed = 0;
     const failures = [];
 
     function check(condition, msg) {
@@ -35,69 +31,74 @@ function sleep(ms) {
         const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
         page = await context.newPage();
 
-        console.log('\n🧪 Church Signage Test Suite\n');
+        console.log('\n🧪 Church Signage Bootstrap Test Suite\n');
 
         // 1. CMS Page Loads
         console.log('1. CMS Page');
         await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
-        await sleep(3000);
+        await sleep(3500);
         check(await page.locator('#app').isVisible().catch(() => false), 'Vue app mounted');
 
-        // 2. Login Visible
+        // 2. Login form visible
         console.log('\n2. Login Form');
-        check(await page.locator('.login-card').isVisible().catch(() => false), 'Login form visible');
+        const loginCard = page.locator('.login-page .card');
+        check(await loginCard.isVisible().catch(() => false), 'Login card visible');
 
         // 3. Login
         console.log('\n3. Login');
-        if (await page.locator('.login-card').isVisible().catch(() => false)) {
-            const inputs = page.locator('.login-card input');
+        if (await loginCard.isVisible().catch(() => false)) {
+            const inputs = loginCard.locator('input');
             await inputs.nth(0).fill('admin');
             await inputs.nth(1).fill('admin');
-            await page.locator('.login-card button[type="submit"]').click();
+            await loginCard.locator('button[type="submit"]').click();
             await sleep(2500);
             check(await page.locator('.sidebar').isVisible().catch(() => false), 'Sidebar visible after login');
         }
 
-        // 4. Dashboard Stats
+        // 4. Dashboard stats
         console.log('\n4. Dashboard');
         if (await page.locator('.sidebar').isVisible().catch(() => false)) {
             await sleep(2000);
-            check(await page.locator('.stat-card').first().isVisible().catch(() => false), 'Stat cards visible');
+            check(await page.locator('.stat-value').first().isVisible().catch(() => false), 'Dashboard stat cards visible');
         }
 
         // 5. Navigation
         console.log('\n5. Navigation');
         if (await page.locator('.sidebar').isVisible().catch(() => false)) {
-            const navCount = (await page.locator('.nav-item').all()).length;
-            check(navCount >= 4, navCount + ' nav items found');
+            const navLinks = await page.locator('.sidebar .nav-link').all();
+            check(navLinks.length >= 5, navLinks.length + ' nav links found (expected 5+)');
 
-            for (const label of ['Media', 'Playlists', 'Devices', 'Player Preview']) {
-                const nav = page.locator('.nav-item', { hasText: label });
-                if (await nav.isVisible().catch(() => false)) {
-                    await nav.click();
+            for (const label of ['Media', 'Playlists', 'Devices']) {
+                const link = page.locator('.sidebar .nav-link', { hasText: label });
+                if (await link.isVisible().catch(() => false)) {
+                    await link.click();
                     await sleep(800);
                 }
             }
-            check(true, 'All navigation links work');
+            check(true, 'Navigated through all pages');
         }
 
         // 6. Create Device
         console.log('\n6. Create Device');
         if (await page.locator('.sidebar').isVisible().catch(() => false)) {
-            await page.locator('.nav-item', { hasText: 'Devices' }).click();
+            await page.locator('.sidebar .nav-link', { hasText: 'Devices' }).click();
             await sleep(1500);
-            const addBtn = page.locator('button', { hasText: 'Add Device' });
+            const addBtn = page.locator('button', { hasText: /Add Device/i });
             if (await addBtn.isVisible().catch(() => false)) {
                 await addBtn.click();
                 await sleep(500);
-                const modal = page.locator('.modal-overlay .modal');
+                const modal = page.locator('.modal.show');
                 if (await modal.isVisible().catch(() => false)) {
-                    await modal.locator('input').first().fill('Test Device');
-                    await modal.locator('button', { hasText: 'Generate' }).click();
+                    await modal.locator('input').first().fill('Test Device Bootstrap');
+                    const generateBtn = modal.locator('button', { hasText: '' }).filter({ has: page.locator('.bi-arrow-repeat') });
+                    // Find the generate button by its icon
+                    await modal.locator('button i.bi-arrow-repeat').first().click();
                     await sleep(300);
                     await modal.locator('.btn-primary').click();
                     await sleep(2000);
-                    check(await page.locator('table').isVisible().catch(() => false), 'Device created and table visible');
+                    check(await page.locator('table').isVisible().catch(() => false), 'Device table visible after creation');
+                } else {
+                    check(false, 'Modal not visible');
                 }
             }
         }
@@ -105,20 +106,20 @@ function sleep(ms) {
         // 7. API tests
         console.log('\n7. API');
         const authCheck = await api('GET', '/auth/check');
-        check(authCheck.success && authCheck.data, 'Auth check: user data returned');
+        check(authCheck.success && authCheck.data, 'Auth check returns user data');
 
         const mediaList = await api('GET', '/media');
-        check(mediaList.success, 'Media list works');
+        check(mediaList.success, 'Media list API works');
 
-        const playlist = await api('POST', '/playlists', { name: 'Test Playlist', default_duration: 10 });
+        const playlist = await api('POST', '/playlists', { name: 'Bootstrap Playlist', default_duration: 10 });
         check(playlist.success, 'Playlist created via API');
 
         const devicesList = await api('GET', '/devices');
-        const deviceCode = devicesList.data && devicesList.data.length > 0 ? devicesList.data[0].code : 'TEST123';
+        const deviceCode = devicesList.data && devicesList.data.length > 0 ? devicesList.data[0].code : 'TEST';
         const playerRes = await api('GET', '/player/' + deviceCode);
-        check(playerRes.success, 'Player API responds for device ' + deviceCode);
+        check(playerRes.success, 'Player API responds for ' + deviceCode);
 
-        // 8. Upload via browser FormData
+        // 8. Upload via browser
         console.log('\n8. Media Upload');
         try {
             const uploadResult = await page.evaluate(async () => {
@@ -135,14 +136,13 @@ function sleep(ms) {
                 ]);
                 const blob = new Blob([png], { type: 'image/png' });
                 const fd = new FormData();
-                fd.append('file', blob, 'test-image.png');
-                fd.append('name', 'Test Image');
-
+                fd.append('file', blob, 'test-bootstrap.png');
+                fd.append('name', 'Bootstrap Test Image');
                 const basePath = window.location.pathname.replace(/\/+$/, '');
                 const res = await fetch(basePath + '/api/media/upload', { method: 'POST', body: fd });
                 return await res.json();
             });
-            check(uploadResult.success === true, 'Media upload via browser works');
+            check(uploadResult.success === true, 'Media upload works');
         } catch (e) {
             check(false, 'Upload failed: ' + e.message);
         }
@@ -150,11 +150,11 @@ function sleep(ms) {
         // 9. Logout
         console.log('\n9. Logout');
         if (await page.locator('.sidebar').isVisible().catch(() => false)) {
-            const logoutBtn = page.locator('.sidebar-footer button');
+            const logoutBtn = page.locator('.sidebar .btn-link', { hasText: 'Logout' });
             if (await logoutBtn.isVisible().catch(() => false)) {
                 await logoutBtn.click();
                 await sleep(1500);
-                check(await page.locator('.login-card').isVisible().catch(() => false), 'Returns to login after logout');
+                check(await page.locator('.login-page .card').isVisible().catch(() => false), 'Returns to login after logout');
             }
         }
 

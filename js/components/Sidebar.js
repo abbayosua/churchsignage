@@ -2,39 +2,36 @@ const Sidebar = {
     name: 'Sidebar',
     template: `
         <aside class="sidebar">
-            <div class="sidebar-header">
-                <h1>⛪ Church Signage</h1>
-                <small>CMS v1.0</small>
+            <div class="p-3 border-bottom border-secondary border-opacity-25">
+                <h5 class="mb-0 text-white"><i class="bi bi-building me-2"></i>Church Signage</h5>
+                <small class="text-secondary" style="opacity:0.6">CMS v1.0</small>
             </div>
-            <nav class="sidebar-nav">
-                <button v-for="item in navItems" :key="item.path"
-                        class="nav-item" :class="{ active: current === item.path }"
-                        @click="navigate(item.path)">
-                    <span>{{ item.icon }}</span>
+            <nav class="nav nav-pills flex-column pt-2">
+                <a v-for="item in navItems" :key="item.path"
+                   class="nav-link d-flex align-items-center" :class="{ active: current === item.path }"
+                   href="#" @click.prevent="navigate(item.path)">
+                    <i :class="'bi bi-' + item.icon + ' me-2'"></i>
                     <span>{{ item.label }}</span>
-                </button>
+                </a>
             </nav>
-            <div class="sidebar-footer">
-                <div style="display:flex;align-items:center;justify-content:space-between">
-                    <span>{{ user ? user.display_name || user.username : 'Not logged in' }}</span>
-                    <button v-if="user" @click="doLogout" style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:12px">Logout</button>
+            <div class="mt-auto p-3 border-top border-secondary border-opacity-25">
+                <div class="d-flex justify-content-between align-items-center small" style="color:rgba(255,255,255,0.45)">
+                    <span><i class="bi bi-person-circle me-1"></i>{{ user ? user.display_name || user.username : '' }}</span>
+                    <button v-if="user" @click="doLogout" class="btn btn-sm btn-link text-white-50 p-0 text-decoration-none">Logout</button>
                 </div>
             </div>
         </aside>
     `,
-    props: {
-        current: String,
-        user: Object,
-    },
+    props: { current: String, user: Object },
     emits: ['navigate', 'logout'],
     data() {
         return {
             navItems: [
-                { path: '/', icon: '📊', label: 'Dashboard' },
-                { path: '/media', icon: '🖼️', label: 'Media' },
-                { path: '/playlists', icon: '📋', label: 'Playlists' },
-                { path: '/devices', icon: '💻', label: 'Devices' },
-                { path: '/player', icon: '▶️', label: 'Player Preview' },
+                { path: '/', icon: 'speedometer2', label: 'Dashboard' },
+                { path: '/media', icon: 'images', label: 'Media' },
+                { path: '/playlists', icon: 'playlist', label: 'Playlists' },
+                { path: '/devices', icon: 'tv', label: 'Devices' },
+                { path: '/player', icon: 'play-circle', label: 'Player Preview' },
             ]
         };
     },

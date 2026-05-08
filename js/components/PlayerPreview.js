@@ -2,25 +2,26 @@ const PlayerPreview = {
     name: 'PlayerPreview',
     template: `
         <div>
-            <div class="page-header">
-                <h2>Player Preview</h2>
-            </div>
-            <div class="card">
-                <div class="form-group">
-                    <label>Select Device</label>
-                    <select class="form-control" v-model="selectedDevice" @change="updateUrl">
-                        <option value="">-- Select a device --</option>
-                        <option v-for="d in devices" :key="d.id" :value="d.code">{{ d.name }} ({{ d.code }})</option>
-                    </select>
-                </div>
-                <div v-if="selectedDevice">
-                    <p style="font-size:13px;color:var(--text-muted);margin-bottom:8px">
-                        Player URL: <code style="background:var(--bg);padding:2px 6px;border-radius:4px">{{ playerUrl }}</code>
-                    </p>
-                    <iframe class="player-frame" :src="playerUrl" style="width:100%;height:500px;border:1px solid var(--border);border-radius:var(--radius);background:#000"></iframe>
-                </div>
-                <div v-else class="empty-state" style="padding:40px">
-                    <p>Select a device to preview its playlist</p>
+            <h4 class="fw-bold mb-4">Player Preview</h4>
+            <div class="card border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Select Device</label>
+                        <select class="form-select" v-model="selectedDevice" @change="updateUrl">
+                            <option value="">-- Select a device --</option>
+                            <option v-for="d in devices" :key="d.id" :value="d.code">{{ d.name }} ({{ d.code }})</option>
+                        </select>
+                    </div>
+                    <div v-if="selectedDevice">
+                        <p class="small text-muted mb-2">
+                            Player URL: <code class="bg-light px-2 py-1 rounded">{{ playerUrl }}</code>
+                        </p>
+                        <iframe class="player-frame" :src="playerUrl" title="Player Preview"></iframe>
+                    </div>
+                    <div v-else class="text-center py-5 text-muted">
+                        <i class="bi bi-play-circle display-4 d-block mb-3" style="opacity:0.3"></i>
+                        <p>Select a device to preview its playlist</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -36,18 +37,13 @@ const PlayerPreview = {
         }
     },
     async created() {
-        try { const res = await api.get('/devices'); this.devices = res.data; }
-        catch (e) {}
+        try { const res = await api.get('/devices'); this.devices = res.data; } catch (e) {}
         const params = new URLSearchParams(window.location.search);
-        if (params.get('device')) {
-            this.selectedDevice = params.get('device');
-        }
+        if (params.get('device')) this.selectedDevice = params.get('device');
     },
     methods: {
         updateUrl() {
-            if (this.selectedDevice) {
-                window.history.replaceState(null, '', '#' + this.selectedDevice);
-            }
+            if (this.selectedDevice) window.history.replaceState(null, '', '#' + this.selectedDevice);
         }
     }
 };
