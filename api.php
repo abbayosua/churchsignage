@@ -39,6 +39,7 @@ $router->post('/api/auth/setup', [AuthController::class, 'setup']);
 $router->get('/api/media', [MediaController::class, 'index']);
 $router->get('/api/media/{id}', [MediaController::class, 'show']);
 $router->post('/api/media/upload', [MediaController::class, 'upload']);
+$router->post('/api/media/youtube', [MediaController::class, 'storeYoutube']);
 $router->put('/api/media/{id}', [MediaController::class, 'update']);
 $router->delete('/api/media/{id}', [MediaController::class, 'destroy']);
 $router->get('/api/media-categories', [MediaController::class, 'categories']);

@@ -101,6 +101,7 @@ html, body {
                        :src="currentItem.url" autoplay :key="currentIndex"
                        @ended="handleVideoEnded" @error="handleMediaError">
                 </video>
+                <div v-else-if="currentItem.media_type === 'youtube'" id="youtube-player" class="w-100 h-100"></div>
             </div>
         </transition>
         <div class="player-info">

@@ -192,6 +192,61 @@ class MediaController
         Helpers::success($item, 'File uploaded', 201);
     }
 
+    public static function storeYoutube(): void
+    {
+        $data = Helpers::getJsonBody();
+        $name = trim($data['name'] ?? '');
+        $url = trim($data['url'] ?? '');
+
+        if (!$name || !$url) {
+            Helpers::error('Name and YouTube URL are required');
+            return;
+        }
+
+        $videoId = self::parseYoutubeId($url);
+        if (!$videoId) {
+            Helpers::error('Invalid YouTube URL');
+            return;
+        }
+
+        $title = $name;
+        $thumbnail = "https://img.youtube.com/vi/$videoId/hqdefault.jpg";
+
+        $oembedUrl = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$videoId&format=json";
+        $oembed = @file_get_contents($oembedUrl);
+        if ($oembed) {
+            $info = json_decode($oembed, true);
+            if ($info && !empty($info['title'])) {
+                $title = $info['title'];
+            }
+        }
+
+        $db = Database::getInstance();
+        $stmt = $db->prepare(
+            'INSERT INTO media (name, filename, original_name, type, mime, size, width, height, duration, thumbnail, metadata)
+             VALUES (?, ?, ?, ?, ?, 0, 0, 0, NULL, ?, ?)'
+        );
+        $meta = json_encode(['youtube_url' => $url, 'video_id' => $videoId]);
+        $stmt->execute([
+            $name,
+            $videoId,
+            $url,
+            'youtube',
+            'text/x-youtube',
+            $thumbnail,
+            $meta,
+        ]);
+
+        $id = $db->lastInsertId();
+        $stmt = $db->prepare('SELECT * FROM media WHERE id = ?');
+        $stmt->execute([$id]);
+        $item = $stmt->fetch();
+        $item['url'] = "https://www.youtube.com/embed/$videoId?autoplay=1&enablejsapi=1";
+        $item['thumbnail_url'] = $thumbnail;
+
+        Helpers::success($item, 'YouTube video added', 201);
+    }
+
     public static function update(array $params): void
     {
         $db = Database::getInstance();
@@ -244,9 +299,11 @@ class MediaController
             return;
         }
 
-        $filePath = __DIR__ . '/../../uploads/' . self::typeFolder($item['type']) . '/' . $item['filename'];
-        if (file_exists($filePath)) {
-            unlink($filePath);
+        if ($item['type'] !== 'youtube') {
+            $filePath = __DIR__ . '/../../uploads/' . self::typeFolder($item['type']) . '/' . $item['filename'];
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
         }
 
         if ($item['thumbnail']) {
@@ -269,7 +326,25 @@ class MediaController
 
     private static function typeFolder(string $type): string
     {
-        return $type === 'gif' ? 'gifs' : $type . 's';
+        return match ($type) {
+            'gif' => 'gifs',
+            'youtube' => 'images',
+            default => $type . 's',
+        };
+    }
+
+    private static function parseYoutubeId(string $url): ?string
+    {
+        $patterns = [
+            '#youtube\.com/watch\?v=([\w-]+)#',
+            '#youtu\.be/([\w-]+)#',
+            '#youtube\.com/embed/([\w-]+)#',
+            '#youtube\.com/shorts/([\w-]+)#',
+        ];
+        foreach ($patterns as $p) {
+            if (preg_match($p, $url, $m)) return $m[1];
+        }
+        return null;
     }
 
     private static function findFfprobe(): ?string

@@ -1,4 +1,25 @@
-const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vue;
+
+let ytApiLoaded = false;
+let ytPlayer = null;
+
+function loadYtApi() {
+    if (ytApiLoaded) return;
+    ytApiLoaded = true;
+    window.onYouTubeIframeAPIReady = () => {};
+    const tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+}
+
+function destroyYtPlayer() {
+    if (ytPlayer) {
+        try { ytPlayer.destroy(); } catch (e) {}
+        ytPlayer = null;
+    }
+    const el = document.getElementById('youtube-player');
+    if (el) el.innerHTML = '';
+}
 
 createApp({
     setup() {
@@ -14,6 +35,7 @@ createApp({
         const currentIndex = ref(0);
         const error = ref('');
         const deviceInfo = ref(null);
+        const isYtPlaying = ref(false);
 
         const baseUrl = window.location.pathname.replace(/\/[^/]*$/, '');
 
@@ -25,10 +47,7 @@ createApp({
         function getDeviceCode() {
             const params = new URLSearchParams(window.location.search);
             const urlCode = params.get('device');
-            if (urlCode) {
-                localStorage.setItem('device_code', urlCode);
-                return urlCode;
-            }
+            if (urlCode) { localStorage.setItem('device_code', urlCode); return urlCode; }
             return localStorage.getItem('device_code') || '';
         }
 
@@ -37,7 +56,6 @@ createApp({
             if (!name) { registerError.value = 'Please enter a device name'; return; }
             registerError.value = '';
             registering.value = true;
-
             try {
                 const res = await fetch(baseUrl + '/api/player/register', {
                     method: 'POST',
@@ -57,7 +75,6 @@ createApp({
                 registerName.value = name;
                 setTimeout(() => {
                     deviceCode.value = code;
-                    deviceName.value = name;
                     state.value = 'loading';
                     fetchPlaylist(code);
                 }, 2000);
@@ -96,11 +113,15 @@ createApp({
         function scheduleNext() {
             if (playbackTimer) clearTimeout(playbackTimer);
             if (items.value.length === 0) return;
-            const delay = getDuration(currentItem.value);
+            const item = currentItem.value;
+            if (item && item.media_type === 'youtube') return;
+            const delay = getDuration(item);
             playbackTimer = setTimeout(() => { nextItem(); }, delay);
         }
 
         function nextItem() {
+            destroyYtPlayer();
+            isYtPlaying.value = false;
             if (items.value.length === 0) return;
             currentIndex.value = (currentIndex.value + 1) % items.value.length;
             scheduleNext();
@@ -108,6 +129,7 @@ createApp({
 
         function handleVideoEnded() { nextItem(); }
         function handleMediaError() { nextItem(); }
+        function handleYtEnded() { nextItem(); }
 
         function getDuration(item) {
             if (!item) return 10000;
@@ -126,9 +148,7 @@ createApp({
 
         function startHeartbeat(code) {
             heartbeatTimer = setInterval(async () => {
-                try {
-                    await fetch(baseUrl + '/api/player/' + encodeURIComponent(code) + '/heartbeat', { method: 'POST' });
-                } catch (e) {}
+                try { await fetch(baseUrl + '/api/player/' + encodeURIComponent(code) + '/heartbeat', { method: 'POST' }); } catch (e) {}
             }, 30000);
         }
 
@@ -136,7 +156,39 @@ createApp({
             try { await document.documentElement.requestFullscreen(); } catch (e) {}
         }
 
+        watch(currentIndex, () => {
+            const item = currentItem.value;
+            if (item && item.media_type === 'youtube') {
+                isYtPlaying.value = true;
+                nextTick(() => {
+                    const videoId = item.filename;
+                    const container = document.getElementById('youtube-player');
+                    if (!container) return;
+                    container.innerHTML = '<div id="yt-embed"></div>';
+                    if (window.YT && window.YT.Player) {
+                        ytPlayer = new window.YT.Player('yt-embed', {
+                            videoId,
+                            width: '100%', height: '100%',
+                            playerVars: { autoplay: 1, controls: 0, modestbranding: 1, rel: 0 },
+                            events: { onStateChange: (e) => { if (e.data === window.YT.PlayerState.ENDED) handleYtEnded(); } },
+                        });
+                    } else {
+                        container.innerHTML = '<iframe src="https://www.youtube.com/embed/' + videoId + '?autoplay=1&controls=0&modestbranding=1&rel=0&enablejsapi=1" class="w-100 h-100" allow="autoplay; encrypted-media" allowfullscreen style="border:0"></iframe>';
+                        const iframe = container.querySelector('iframe');
+                        if (iframe) {
+                            iframe.onload = () => {
+                                setTimeout(() => { handleYtEnded(); }, getDuration(item));
+                            };
+                        }
+                    }
+                });
+            } else {
+                isYtPlaying.value = false;
+            }
+        });
+
         onMounted(() => {
+            loadYtApi();
             const code = getDeviceCode();
             const name = localStorage.getItem('device_name') || '';
             if (code) {
@@ -152,6 +204,7 @@ createApp({
         });
 
         onUnmounted(() => {
+            destroyYtPlayer();
             clearInterval(heartbeatTimer);
             clearInterval(refreshTimer);
             clearTimeout(playbackTimer);
@@ -159,7 +212,7 @@ createApp({
 
         return {
             state, deviceCode, deviceName, registerName, registerError, registering, registerSuccess,
-            currentItem, currentIndex, items, playlist, error, deviceInfo, getTransition,
+            currentItem, currentIndex, items, playlist, error, deviceInfo, getTransition, isYtPlaying,
             handleVideoEnded, handleMediaError, doRegister,
         };
     },

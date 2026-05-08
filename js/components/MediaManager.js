@@ -10,8 +10,10 @@ const MediaManager = {
                         <option value="image">Images</option>
                         <option value="video">Videos</option>
                         <option value="gif">GIFs</option>
+                        <option value="youtube">YouTube</option>
                     </select>
                     <input class="form-control form-control-sm" v-model="searchQuery" @input="debounceSearch" placeholder="Search..." style="width:180px">
+                    <button class="btn btn-outline-danger btn-sm" @click="showYoutube = true"><i class="bi bi-youtube me-1"></i>YouTube</button>
                     <button class="btn btn-primary btn-sm" @click="showUpload = true"><i class="bi bi-upload me-1"></i>Upload</button>
                 </div>
             </div>
@@ -95,6 +97,38 @@ const MediaManager = {
                 </div>
             </div>
 
+            <div v-if="showYoutube" class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title"><i class="bi bi-youtube text-danger me-1"></i>Add YouTube Video</h5>
+                            <button class="btn-close" @click="closeYoutube"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold text-muted">Name</label>
+                                <input class="form-control" v-model="ytName" placeholder="Video title">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small fw-semibold text-muted">YouTube URL</label>
+                                <input class="form-control" v-model="ytUrl" placeholder="https://youtube.com/watch?v=...">
+                            </div>
+                            <div v-if="ytThumb" class="text-center">
+                                <img :src="ytThumb" class="img-fluid rounded" style="max-height:200px">
+                            </div>
+                            <div v-if="ytError" class="alert alert-danger py-2 small mt-2">{{ ytError }}</div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-outline-secondary" @click="closeYoutube">Cancel</button>
+                            <button class="btn btn-danger" @click="addYoutube" :disabled="ytAdding || !ytName.trim() || !ytUrl.trim()">
+                                <span v-if="ytAdding" class="spinner-border spinner-border-sm me-1"></span>
+                                {{ ytAdding ? 'Adding...' : 'Add Video' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div v-if="previewItem" class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,0.5)">
                 <div class="modal-dialog modal-lg modal-dialog-centered">
                     <div class="modal-content">
@@ -105,13 +139,19 @@ const MediaManager = {
                         <div class="modal-body p-0">
                             <div class="preview-box rounded-0" style="aspect-ratio:16/9">
                                 <img v-if="previewItem.type === 'image' || previewItem.type === 'gif'" :src="previewItem.url" class="mw-100 mh-100">
-                                <video v-else :src="previewItem.url" controls class="mw-100 mh-100"></video>
+                                <video v-else-if="previewItem.type === 'video'" :src="previewItem.url" controls class="mw-100 mh-100"></video>
+                                <iframe v-else-if="previewItem.type === 'youtube'" :src="previewItem.url" class="w-100 h-100" allow="autoplay; encrypted-media" allowfullscreen></iframe>
                             </div>
                         </div>
                         <div class="modal-footer small text-muted d-block">
-                            {{ previewItem.width }}x{{ previewItem.height }} &middot;
-                            {{ (previewItem.size / 1024 / 1024).toFixed(2) }} MB &middot;
-                            {{ previewItem.mime }}
+                            <template v-if="previewItem.type === 'youtube'">
+                                YouTube Video &middot; ID: {{ previewItem.filename }}
+                            </template>
+                            <template v-else>
+                                {{ previewItem.width }}x{{ previewItem.height }} &middot;
+                                {{ (previewItem.size / 1024 / 1024).toFixed(2) }} MB &middot;
+                                {{ previewItem.mime }}
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -125,6 +165,7 @@ const MediaManager = {
             filterType: '', searchQuery: '',
             showUpload: false, uploadFile: null, uploadName: '', uploadCategory: '',
             uploading: false, previewItem: null, searchTimer: null,
+            showYoutube: false, ytName: '', ytUrl: '', ytError: '', ytAdding: false, ytThumb: '',
         };
     },
     async created() {
@@ -185,6 +226,26 @@ const MediaManager = {
                 alert('Upload failed: ' + e.message);
             } finally {
                 this.uploading = false;
+            }
+        },
+        closeYoutube() {
+            this.showYoutube = false; this.ytName = ''; this.ytUrl = ''; this.ytError = ''; this.ytThumb = '';
+        },
+        async addYoutube() {
+            this.ytError = '';
+            this.ytAdding = true;
+            try {
+                const res = await api.post('/media/youtube', { name: this.ytName.trim(), url: this.ytUrl.trim() });
+                if (res.success) {
+                    this.ytThumb = res.data.thumbnail_url || '';
+                    this.closeYoutube();
+                    this.page = 1;
+                    await this.loadMedia();
+                }
+            } catch (e) {
+                this.ytError = e.message;
+            } finally {
+                this.ytAdding = false;
             }
         },
         preview(m) { this.previewItem = m; },

@@ -198,7 +198,52 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             check(false, 'Upload failed: ' + e.message);
         }
 
-        // 11. Logout
+        // 11. YouTube integration
+        console.log('\n── YouTube ──');
+        try {
+            const ytRes = await page.evaluate(async () => {
+                const basePath = window.location.pathname.replace(/\/[^/]*$/, '');
+                const res = await fetch(basePath + '/api/media/youtube', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: 'Test YouTube Video',
+                        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                    }),
+                });
+                return await res.json();
+            });
+            const ytOk = ytRes.success === true;
+            check(ytOk, 'YouTube video added via API');
+            if (ytOk) {
+                check(ytRes.data.type === 'youtube', 'Media type is "youtube"');
+                check(!!ytRes.data.filename, 'YouTube video ID extracted: ' + ytRes.data.filename);
+            }
+        } catch (e) {
+            check(false, 'YouTube API failed: ' + e.message);
+        }
+
+        // Verify YouTube appears in media list
+        const mediaWithYt = await api('GET', '/media');
+        const ytItem = mediaWithYt.data.items.find(m => m.type === 'youtube');
+        check(!!ytItem, 'YouTube video appears in media list');
+
+        // Add YouTube to playlist
+        const playlistsRes = await api('GET', '/playlists');
+        if (playlistsRes.data && playlistsRes.data.length > 0 && ytItem) {
+            const plId = playlistsRes.data[0].id;
+            const addRes = await api('POST', '/playlists/' + plId + '/items', {
+                items: [{ media_id: ytItem.id, duration_override: 15 }],
+            });
+            check(addRes.success, 'YouTube video added to playlist');
+
+            // Verify it's in the playlist
+            const plDetail = await api('GET', '/playlists/' + plId);
+            const hasYt = plDetail.data.items && plDetail.data.items.some(i => i.media_type === 'youtube');
+            check(!!hasYt, 'YouTube video confirmed in playlist items');
+        }
+
+        // 12. Logout
         console.log('\n── Logout ──');
         if (await page.locator('.sidebar').isVisible().catch(() => false)) {
             const logoutBtn = page.locator('.sidebar .btn-link', { hasText: 'Logout' });
