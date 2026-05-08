@@ -1,7 +1,4 @@
-const BASE_URL = (() => {
-    const path = window.location.pathname.replace(/\/+$/, '');
-    return path + '/api';
-})();
+const BASE_URL = window.location.pathname.replace(/\/[^/]*$/, '') + '/api';
 
 const api = {
     async request(method, endpoint, data = null, isUpload = false) {

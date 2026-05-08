@@ -58,6 +58,7 @@ $router->put('/api/devices/{id}', [DeviceController::class, 'update']);
 $router->delete('/api/devices/{id}', [DeviceController::class, 'destroy']);
 $router->get('/api/device-groups', [DeviceController::class, 'groups']);
 
+$router->post('/api/player/register', [PlayerController::class, 'register']);
 $router->get('/api/player/{code}', [PlayerController::class, 'getPlaylist']);
 $router->post('/api/player/{code}/heartbeat', [PlayerController::class, 'heartbeat']);
 

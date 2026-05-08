@@ -103,6 +103,42 @@ class PlayerController
         ]);
     }
 
+    public static function register(): void
+    {
+        $data = Helpers::getJsonBody();
+        $name = trim($data['name'] ?? '');
+        if (!$name) {
+            Helpers::error('Device name is required');
+            return;
+        }
+
+        $code = strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+        $db = Database::getInstance();
+
+        $stmt = $db->prepare('SELECT COUNT(*) as cnt FROM devices WHERE code = ?');
+        $stmt->execute([$code]);
+        while ($stmt->fetch()['cnt'] > 0) {
+            $code = strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+            $stmt->execute([$code]);
+        }
+
+        $stmt = $db->prepare('INSERT INTO devices (name, code, orientation, resolution, is_active) VALUES (?, ?, ?, ?, 1)');
+        $stmt->execute([
+            $name,
+            $code,
+            $data['orientation'] ?? 'landscape',
+            $data['resolution'] ?? '1920x1080',
+        ]);
+
+        $id = $db->lastInsertId();
+
+        Helpers::success([
+            'id' => $id,
+            'name' => $name,
+            'code' => $code,
+        ], 'Device registered', 201);
+    }
+
     private static function formatDevice(array $device): array
     {
         return [

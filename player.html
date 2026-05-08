@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Church Signage Player</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body {
@@ -17,107 +19,98 @@ html, body {
     width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
 }
-.player-loading {
-    text-align: center;
-    font-size: 24px;
-    opacity: 0.6;
-}
-.player-loading .spinner {
-    width: 48px; height: 48px;
-    border: 4px solid rgba(255,255,255,0.1);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 20px auto;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-.player-error {
-    text-align: center;
-    padding: 40px;
-    max-width: 500px;
-}
-.player-error h2 { font-size: 28px; margin-bottom: 12px; }
-.player-error p { font-size: 16px; opacity: 0.6; }
 .player-item {
     width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
     animation: fadeIn 0.5s ease;
 }
-.player-item img {
-    max-width: 100%; max-height: 100%;
-    object-fit: contain;
-}
-.player-item video {
-    width: 100%; height: 100%;
-    object-fit: contain;
-}
-.fade-enter-active, .fade-leave-active {
-    transition: opacity 1s ease;
-}
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.player-item img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.player-item video { width: 100%; height: 100%; object-fit: contain; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .player-info {
     position: fixed; bottom: 10px; right: 10px;
     font-size: 11px; opacity: 0.3;
-    pointer-events: none;
-    z-index: 999;
+    pointer-events: none; z-index: 999;
 }
-.player-info.error { opacity: 0.8; }
-.player-empty {
-    text-align: center;
-    font-size: 18px;
-    opacity: 0.4;
-}
-@media print {
-    .player-info { display: none; }
-}
+.fade-enter-active, .fade-leave-active { transition: opacity 1s ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>
 </head>
 <body>
 <div id="player-app">
-    <div v-if="loading" class="player-loading">
-        <div class="spinner"></div>
-        <div>Connecting...</div>
+    <div v-if="state === 'loading'" class="d-flex align-items-center justify-content-center vh-100 w-100">
+        <div class="text-center">
+            <div class="spinner-border text-light mb-3" style="width:3rem;height:3rem" role="status"></div>
+            <p class="text-white-50">Connecting to server...</p>
+        </div>
     </div>
 
-    <div v-else-if="error" class="player-error">
-        <h2>No Signal</h2>
-        <p>{{ error }}</p>
-        <p style="margin-top:20px;font-size:14px;opacity:0.4">Church Signage v1.0</p>
+    <div v-else-if="state === 'error'" class="d-flex align-items-center justify-content-center vh-100 w-100">
+        <div class="text-center px-4" style="max-width:500px">
+            <i class="bi bi-wifi-off display-1 d-block mb-3 text-white-50"></i>
+            <h2 class="text-white mb-2">No Signal</h2>
+            <p class="text-white-50">{{ error }}</p>
+            <p class="small text-white-50 mt-3 opacity-50">Church Signage v1.0</p>
+        </div>
     </div>
 
-    <div v-else-if="!currentItem" class="player-empty">
-        No content to display
-    </div>
+    <div v-else-if="state === 'register'" class="d-flex align-items-center justify-content-center vh-100 w-100">
+        <div class="card shadow-lg border-0" style="width:100%;max-width:420px;background:#1a1a2e;color:#fff">
+            <div class="card-body p-4 text-center">
+                <i class="bi bi-tv display-4 d-block mb-2 text-primary"></i>
+                <h4 class="mb-1">Church Signage</h4>
+                <p class="text-white-50 small mb-4">Register this device to start receiving content</p>
 
-    <transition v-else :name="getTransition()">
-        <div class="player-item" :key="currentIndex">
-            <img v-if="currentItem.media_type === 'image' || currentItem.media_type === 'gif'"
-                 :src="currentItem.url"
-                 :alt="currentItem.media_name"
-                 @error="handleMediaError">
+                <div v-if="registerSuccess" class="py-3">
+                    <i class="bi bi-check-circle text-success display-5 d-block mb-2"></i>
+                    <h5 class="text-success">Registered!</h5>
+                    <p class="small text-white-50 mb-0">Device <strong>{{ registerName }}</strong> is ready</p>
+                    <p class="small text-white-50">Starting player...</p>
+                </div>
 
-            <video v-else-if="currentItem.media_type === 'video'"
-                   :src="currentItem.url"
-                   autoplay
-                   :key="currentIndex"
-                   @ended="handleVideoEnded"
-                   @error="handleMediaError"
-                   :style="{ '--dur': getDuration(currentItem) + 'ms' }">
-            </video>
+                <form v-else @submit.prevent="doRegister">
+                    <div v-if="registerError" class="alert alert-danger py-2 small">{{ registerError }}</div>
+                    <div class="mb-3 text-start">
+                        <label class="form-label small text-white-50">Device Name</label>
+                        <input class="form-control bg-dark border-secondary text-white" v-model="registerName"
+                               placeholder="e.g. Main Hall TV" required autofocus>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100" :disabled="registering">
+                        <span v-if="registering" class="spinner-border spinner-border-sm me-1"></span>
+                        {{ registering ? 'Registering...' : 'Register Device' }}
+                    </button>
+                </form>
 
-            <div v-else class="player-error">
-                <p>Unsupported media type: {{ currentItem.media_type }}</p>
+                <p class="mt-3 mb-0" style="font-size:11px;color:rgba(255,255,255,0.2)">
+                    This will be saved for future use
+                </p>
             </div>
         </div>
-    </transition>
+    </div>
 
-    <div class="player-info" :class="{ error: error }">
-        <span v-if="deviceCode">{{ deviceCode }}</span>
-        <span v-if="currentIndex !== null && items.length > 0"> | {{ currentIndex + 1 }}/{{ items.length }}</span>
+    <div v-else-if="state === 'playing'">
+        <div v-if="!currentItem" class="d-flex align-items-center justify-content-center vh-100 w-100">
+            <p class="text-white-50">No content to display</p>
+        </div>
+        <transition v-else :name="getTransition()">
+            <div class="player-item" :key="currentIndex">
+                <img v-if="currentItem.media_type === 'image' || currentItem.media_type === 'gif'"
+                     :src="currentItem.url" :alt="currentItem.media_name"
+                     @error="handleMediaError">
+                <video v-else-if="currentItem.media_type === 'video'"
+                       :src="currentItem.url" autoplay :key="currentIndex"
+                       @ended="handleVideoEnded" @error="handleMediaError">
+                </video>
+            </div>
+        </transition>
+        <div class="player-info">
+            <span v-if="deviceCode">{{ deviceCode }}</span>
+            <span v-if="currentIndex !== null && items.length > 0"> | {{ currentIndex + 1 }}/{{ items.length }}</span>
+        </div>
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script src="js/player.js"></script>
 </body>

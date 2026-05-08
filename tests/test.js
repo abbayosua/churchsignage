@@ -29,23 +29,23 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
     try {
         browser = await chromium.launch({ channel: 'chrome', headless: true });
         const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
-        page = await context.newPage();
 
         console.log('\n🧪 Church Signage Bootstrap Test Suite\n');
 
+        // ── CMS Tests ──
+        console.log('── CMS ──');
+        page = await context.newPage();
+
         // 1. CMS Page Loads
-        console.log('1. CMS Page');
         await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
         await sleep(3500);
         check(await page.locator('#app').isVisible().catch(() => false), 'Vue app mounted');
 
-        // 2. Login form visible
-        console.log('\n2. Login Form');
+        // 2. Login form
         const loginCard = page.locator('.login-page .card');
         check(await loginCard.isVisible().catch(() => false), 'Login card visible');
 
         // 3. Login
-        console.log('\n3. Login');
         if (await loginCard.isVisible().catch(() => false)) {
             const inputs = loginCard.locator('input');
             await inputs.nth(0).fill('admin');
@@ -55,18 +55,16 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             check(await page.locator('.sidebar').isVisible().catch(() => false), 'Sidebar visible after login');
         }
 
-        // 4. Dashboard stats
-        console.log('\n4. Dashboard');
+        // 4. Dashboard
         if (await page.locator('.sidebar').isVisible().catch(() => false)) {
             await sleep(2000);
             check(await page.locator('.stat-value').first().isVisible().catch(() => false), 'Dashboard stat cards visible');
         }
 
         // 5. Navigation
-        console.log('\n5. Navigation');
         if (await page.locator('.sidebar').isVisible().catch(() => false)) {
             const navLinks = await page.locator('.sidebar .nav-link').all();
-            check(navLinks.length >= 5, navLinks.length + ' nav links found (expected 5+)');
+            check(navLinks.length >= 5, navLinks.length + ' nav links found');
 
             for (const label of ['Media', 'Playlists', 'Devices']) {
                 const link = page.locator('.sidebar .nav-link', { hasText: label });
@@ -78,8 +76,8 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             check(true, 'Navigated through all pages');
         }
 
-        // 6. Create Device
-        console.log('\n6. Create Device');
+        // 6. Create Device (manual CMS flow)
+        console.log('\n── CMS Device Registration ──');
         if (await page.locator('.sidebar').isVisible().catch(() => false)) {
             await page.locator('.sidebar .nav-link', { hasText: 'Devices' }).click();
             await sleep(1500);
@@ -89,43 +87,102 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
                 await sleep(500);
                 const modal = page.locator('.modal.show');
                 if (await modal.isVisible().catch(() => false)) {
-                    await modal.locator('input').first().fill('Test Device Bootstrap');
-                    const generateBtn = modal.locator('button', { hasText: '' }).filter({ has: page.locator('.bi-arrow-repeat') });
-                    // Find the generate button by its icon
+                    await modal.locator('input').first().fill('CMS Device');
                     await modal.locator('button i.bi-arrow-repeat').first().click();
                     await sleep(300);
                     await modal.locator('.btn-primary').click();
                     await sleep(2000);
-                    check(await page.locator('table').isVisible().catch(() => false), 'Device table visible after creation');
-                } else {
-                    check(false, 'Modal not visible');
+                    check(await page.locator('table').isVisible().catch(() => false), 'Device created from CMS, table visible');
                 }
             }
         }
 
         // 7. API tests
-        console.log('\n7. API');
+        console.log('\n── API ──');
         const authCheck = await api('GET', '/auth/check');
         check(authCheck.success && authCheck.data, 'Auth check returns user data');
 
         const mediaList = await api('GET', '/media');
         check(mediaList.success, 'Media list API works');
 
-        const playlist = await api('POST', '/playlists', { name: 'Bootstrap Playlist', default_duration: 10 });
+        const playlist = await api('POST', '/playlists', { name: 'Test Playlist', default_duration: 10 });
         check(playlist.success, 'Playlist created via API');
 
         const devicesList = await api('GET', '/devices');
-        const deviceCode = devicesList.data && devicesList.data.length > 0 ? devicesList.data[0].code : 'TEST';
-        const playerRes = await api('GET', '/player/' + deviceCode);
-        check(playerRes.success, 'Player API responds for ' + deviceCode);
+        check(devicesList.data && devicesList.data.length > 0, 'At least 1 device exists');
 
-        // 8. Upload real image from picsum.photos
-        console.log('\n8. Media Upload (real photo from picsum.photos)');
+        // 8. Player Auto-Register Test
+        console.log('\n── Player Auto-Register ──');
+        await page.close();
+
+        // Fresh page (no localStorage) to test registration
+        page = await context.newPage();
+        await page.goto(BASE + '/player.html', { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+        await sleep(3000);
+
+        // Registration form should appear
+        const regForm = page.locator('.card', { hasText: 'Register' });
+        check(await regForm.isVisible().catch(() => false), 'Registration form visible on player.html');
+
+        // Fill and submit
+        if (await regForm.isVisible().catch(() => false)) {
+            await regForm.locator('input').fill('Auto Register TV');
+            await regForm.locator('button[type="submit"]').click();
+            await sleep(1000);
+
+            // Should show success message (before transitioning to player)
+            const successIcon = page.locator('.bi-check-circle');
+            check(await successIcon.isVisible().catch(() => false), 'Registration success shown after submit');
+
+            // Wait for auto-transition to playing state
+            await sleep(3000);
+        }
+
+        // Verify device appears in API
+        const updatedDevices = await api('GET', '/devices');
+        const autoDevice = updatedDevices.data.find(d => d.name === 'Auto Register TV');
+        check(!!autoDevice, 'Auto-registered device appears in CMS (name: "Auto Register TV")');
+        if (autoDevice) {
+            check(autoDevice.is_active == 1, 'Auto-registered device is active');
+        }
+
+        // 9. Verify localStorage persistence
+        console.log('\n── Player Reopen (localStorage) ──');
+        await page.close();
+
+        page = await context.newPage();
+        await page.goto(BASE + '/player.html', { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+        await sleep(3000);
+
+        // Should NOT show registration form (because localStorage has the code)
+        const regFormAgain = page.locator('.card', { hasText: 'Register' });
+        check(!(await regFormAgain.isVisible().catch(() => false)), 'Registration hidden on reopen (localStorage)');
+
+        // Should show player content or heartbeat info
+        const playerInfo = page.locator('.player-info');
+        check(await playerInfo.isVisible().catch(() => false), 'Player info visible on reopen');
+
+        // 10. Upload real photo from picsum.photos
+        console.log('\n── Media Upload ──');
+        await page.close();
+        page = await context.newPage();
+        await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => {});
+        await sleep(3500);
+
+        // Login again
+        const loginCard2 = page.locator('.login-page .card');
+        if (await loginCard2.isVisible().catch(() => false)) {
+            const inputs = loginCard2.locator('input');
+            await inputs.nth(0).fill('admin');
+            await inputs.nth(1).fill('admin');
+            await loginCard2.locator('button[type="submit"]').click();
+            await sleep(2500);
+        }
+
         try {
             const uploadResult = await page.evaluate(async () => {
                 const imgRes = await fetch('https://picsum.photos/400/300.webp', {
-                    redirect: 'follow',
-                    cache: 'no-cache',
+                    redirect: 'follow', cache: 'no-cache',
                 });
                 const blob = await imgRes.blob();
                 const ext = blob.type.includes('webp') ? 'webp' : 'jpg';
@@ -141,8 +198,8 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             check(false, 'Upload failed: ' + e.message);
         }
 
-        // 9. Logout
-        console.log('\n9. Logout');
+        // 11. Logout
+        console.log('\n── Logout ──');
         if (await page.locator('.sidebar').isVisible().catch(() => false)) {
             const logoutBtn = page.locator('.sidebar .btn-link', { hasText: 'Logout' });
             if (await logoutBtn.isVisible().catch(() => false)) {

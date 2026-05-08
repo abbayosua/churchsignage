@@ -1,105 +1,103 @@
-const { createApp, ref, computed, onMounted, onUnmounted, nextTick } = Vue;
+const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
 
 createApp({
     setup() {
+        const state = ref('loading');
         const deviceCode = ref('');
+        const deviceName = ref('');
+        const registerName = ref('');
+        const registerError = ref('');
+        const registering = ref(false);
+        const registerSuccess = ref(false);
         const playlist = ref(null);
         const items = ref([]);
         const currentIndex = ref(0);
-        const loading = ref(true);
         const error = ref('');
         const deviceInfo = ref(null);
-        const isPlaying = ref(false);
 
-        function getDeviceCode() {
-            const params = new URLSearchParams(window.location.search);
-            return params.get('device') || '';
-        }
+        const baseUrl = window.location.pathname.replace(/\/[^/]*$/, '');
 
         const currentItem = computed(() => {
             if (items.value.length === 0) return null;
             return items.value[currentIndex.value];
         });
 
-        const baseUrl = (() => {
-            const path = window.location.pathname.replace(/\/+$/, '');
-            return path;
-        })();
-
-        async function fetchPlaylist() {
-            const code = getDeviceCode();
-            if (!code) {
-                error.value = 'No device code specified. Use ?device=CODE';
-                loading.value = false;
-                return;
+        function getDeviceCode() {
+            const params = new URLSearchParams(window.location.search);
+            const urlCode = params.get('device');
+            if (urlCode) {
+                localStorage.setItem('device_code', urlCode);
+                return urlCode;
             }
-            deviceCode.value = code;
+            return localStorage.getItem('device_code') || '';
+        }
 
+        async function doRegister() {
+            const name = registerName.value.trim();
+            if (!name) { registerError.value = 'Please enter a device name'; return; }
+            registerError.value = '';
+            registering.value = true;
+
+            try {
+                const res = await fetch(baseUrl + '/api/player/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name }),
+                });
+                const json = await res.json();
+                if (!json.success) {
+                    registerError.value = json.message || 'Registration failed';
+                    registering.value = false;
+                    return;
+                }
+                const code = json.data.code;
+                localStorage.setItem('device_code', code);
+                localStorage.setItem('device_name', name);
+                registerSuccess.value = true;
+                registerName.value = name;
+                setTimeout(() => {
+                    deviceCode.value = code;
+                    deviceName.value = name;
+                    state.value = 'loading';
+                    fetchPlaylist(code);
+                }, 2000);
+            } catch (e) {
+                registerError.value = 'Connection error: ' + e.message;
+            } finally {
+                registering.value = false;
+            }
+        }
+
+        async function fetchPlaylist(code) {
+            state.value = 'loading';
             try {
                 const res = await fetch(baseUrl + '/api/player/' + encodeURIComponent(code));
                 const json = await res.json();
-
                 if (!json.success) {
                     error.value = json.message || 'Failed to load playlist';
-                    loading.value = false;
+                    state.value = 'error';
                     return;
                 }
-
                 deviceInfo.value = json.data.device;
                 playlist.value = json.data.playlist;
                 items.value = json.data.items || [];
-                loading.value = false;
-                startPlayback();
+                state.value = 'playing';
+                scheduleNext();
             } catch (e) {
                 error.value = 'Connection error: ' + e.message;
-                loading.value = false;
+                state.value = 'error';
             }
         }
 
-        let heartbeatTimer = null;
-
-        function startHeartbeat() {
-            const code = getDeviceCode();
-            if (!code) return;
-            heartbeatTimer = setInterval(async () => {
-                try {
-                    const res = await fetch(baseUrl + '/api/player/' + encodeURIComponent(code) + '/heartbeat', { method: 'POST' });
-                    const json = await res.json();
-                    if (json.success && json.data.heartbeat_interval) {
-                        clearInterval(heartbeatTimer);
-                        startHeartbeatWithInterval(json.data.heartbeat_interval * 1000);
-                    }
-                } catch (e) {
-                    // Silent fail
-                }
-            }, 30000);
-        }
-
-        function startHeartbeatWithInterval(interval) {
-            heartbeatTimer = setInterval(async () => {
-                try {
-                    await fetch(baseUrl + '/api/player/' + encodeURIComponent(getDeviceCode()) + '/heartbeat', { method: 'POST' });
-                } catch (e) {}
-            }, interval);
-        }
-
         let playbackTimer = null;
-        let playlistRefreshTimer = null;
+        let heartbeatTimer = null;
+        let refreshTimer = null;
 
         function scheduleNext() {
             if (playbackTimer) clearTimeout(playbackTimer);
+            if (items.value.length === 0) return;
             const delay = getDuration(currentItem.value);
             playbackTimer = setTimeout(() => { nextItem(); }, delay);
-        }
-
-        function startPlayback() {
-            if (items.value.length === 0) return;
-            isPlaying.value = true;
-            scheduleNext();
-
-            playlistRefreshTimer = setInterval(() => {
-                fetchPlaylist();
-            }, 60000);
         }
 
         function nextItem() {
@@ -108,13 +106,8 @@ createApp({
             scheduleNext();
         }
 
-        function handleVideoEnded() {
-            nextItem();
-        }
-
-        function handleMediaError() {
-            nextItem();
-        }
+        function handleVideoEnded() { nextItem(); }
+        function handleMediaError() { nextItem(); }
 
         function getDuration(item) {
             if (!item) return 10000;
@@ -126,42 +119,48 @@ createApp({
             }
             return 10000;
         }
-            return 10000;
+
+        function getTransition() {
+            return playlist.value && playlist.value.transition ? playlist.value.transition : 'fade';
+        }
+
+        function startHeartbeat(code) {
+            heartbeatTimer = setInterval(async () => {
+                try {
+                    await fetch(baseUrl + '/api/player/' + encodeURIComponent(code) + '/heartbeat', { method: 'POST' });
+                } catch (e) {}
+            }, 30000);
         }
 
         async function requestFullscreen() {
-            try {
-                await document.documentElement.requestFullscreen();
-            } catch (e) {
-                // Not allowed without user gesture
-            }
-        }
-
-        function getTransition() {
-            if (playlist.value && playlist.value.transition) {
-                return playlist.value.transition;
-            }
-            return 'fade';
+            try { await document.documentElement.requestFullscreen(); } catch (e) {}
         }
 
         onMounted(() => {
-            fetchPlaylist();
-            startHeartbeat();
+            const code = getDeviceCode();
+            const name = localStorage.getItem('device_name') || '';
+            if (code) {
+                deviceCode.value = code;
+                deviceName.value = name;
+                fetchPlaylist(code);
+                startHeartbeat(code);
+            } else {
+                state.value = 'register';
+            }
             document.addEventListener('click', requestFullscreen, { once: true });
             document.addEventListener('touchstart', requestFullscreen, { once: true });
         });
 
         onUnmounted(() => {
             clearInterval(heartbeatTimer);
-            clearInterval(playlistRefreshTimer);
+            clearInterval(refreshTimer);
             clearTimeout(playbackTimer);
         });
 
         return {
-            loading, error, currentItem, currentIndex, items, playlist,
-            deviceInfo, deviceCode, isPlaying, getTransition,
-            nextItem, handleVideoEnded, handleMediaError, getDuration,
-            baseUrl, fetchPlaylist,
+            state, deviceCode, deviceName, registerName, registerError, registering, registerSuccess,
+            currentItem, currentIndex, items, playlist, error, deviceInfo, getTransition,
+            handleVideoEnded, handleMediaError, doRegister,
         };
     },
 }).mount('#player-app');
