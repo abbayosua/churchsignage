@@ -119,30 +119,24 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
         const playerRes = await api('GET', '/player/' + deviceCode);
         check(playerRes.success, 'Player API responds for ' + deviceCode);
 
-        // 8. Upload via browser
-        console.log('\n8. Media Upload');
+        // 8. Upload real image from picsum.photos
+        console.log('\n8. Media Upload (real photo from picsum.photos)');
         try {
             const uploadResult = await page.evaluate(async () => {
-                const png = new Uint8Array([
-                    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-                    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-                    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-                    0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
-                    0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41,
-                    0x54, 0x08, 0xD7, 0x63, 0x60, 0x60, 0x00, 0x00,
-                    0x00, 0x02, 0x00, 0x01, 0xE5, 0x27, 0xDE, 0xFC,
-                    0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44,
-                    0xAE, 0x42, 0x60, 0x82,
-                ]);
-                const blob = new Blob([png], { type: 'image/png' });
+                const imgRes = await fetch('https://picsum.photos/400/300.webp', {
+                    redirect: 'follow',
+                    cache: 'no-cache',
+                });
+                const blob = await imgRes.blob();
+                const ext = blob.type.includes('webp') ? 'webp' : 'jpg';
                 const fd = new FormData();
-                fd.append('file', blob, 'test-bootstrap.png');
-                fd.append('name', 'Bootstrap Test Image');
+                fd.append('file', blob, 'test-photo.' + ext);
+                fd.append('name', 'Test Photo from picsum');
                 const basePath = window.location.pathname.replace(/\/+$/, '');
                 const res = await fetch(basePath + '/api/media/upload', { method: 'POST', body: fd });
                 return await res.json();
             });
-            check(uploadResult.success === true, 'Media upload works');
+            check(uploadResult.success === true, 'Real photo upload works (from picsum.photos)');
         } catch (e) {
             check(false, 'Upload failed: ' + e.message);
         }

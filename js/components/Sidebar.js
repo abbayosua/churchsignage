@@ -29,7 +29,7 @@ const Sidebar = {
             navItems: [
                 { path: '/', icon: 'speedometer2', label: 'Dashboard' },
                 { path: '/media', icon: 'images', label: 'Media' },
-                { path: '/playlists', icon: 'playlist', label: 'Playlists' },
+                { path: '/playlists', icon: 'collection-play', label: 'Playlists' },
                 { path: '/devices', icon: 'tv', label: 'Devices' },
                 { path: '/player', icon: 'play-circle', label: 'Player Preview' },
             ]
