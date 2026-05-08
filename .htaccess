@@ -1,0 +1,17 @@
+RewriteEngine On
+
+# Deny access to sensitive directories
+RewriteRule ^(src|config|tests)(/|$) - [F,L]
+RewriteRule ^schema\.sql$ - [F,L]
+RewriteRule ^\.htaccess$ - [F,L]
+
+# Allow direct access to existing files and directories
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Rewrite /api/* to api.php
+RewriteRule ^api/ api.php [L,QSA]
+
+# PHP errors
+php_flag display_errors off

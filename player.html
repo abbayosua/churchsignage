@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Church Signage Player</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+#player-app {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+}
+.player-loading {
+    text-align: center;
+    font-size: 24px;
+    opacity: 0.6;
+}
+.player-loading .spinner {
+    width: 48px; height: 48px;
+    border: 4px solid rgba(255,255,255,0.1);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.player-error {
+    text-align: center;
+    padding: 40px;
+    max-width: 500px;
+}
+.player-error h2 { font-size: 28px; margin-bottom: 12px; }
+.player-error p { font-size: 16px; opacity: 0.6; }
+.player-item {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.5s ease;
+}
+.player-item img {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain;
+}
+.player-item video {
+    width: 100%; height: 100%;
+    object-fit: contain;
+}
+.fade-enter-active, .fade-leave-active {
+    transition: opacity 1s ease;
+}
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.player-info {
+    position: fixed; bottom: 10px; right: 10px;
+    font-size: 11px; opacity: 0.3;
+    pointer-events: none;
+    z-index: 999;
+}
+.player-info.error { opacity: 0.8; }
+.player-empty {
+    text-align: center;
+    font-size: 18px;
+    opacity: 0.4;
+}
+@media print {
+    .player-info { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="player-app">
+    <div v-if="loading" class="player-loading">
+        <div class="spinner"></div>
+        <div>Connecting...</div>
+    </div>
+
+    <div v-else-if="error" class="player-error">
+        <h2>No Signal</h2>
+        <p>{{ error }}</p>
+        <p style="margin-top:20px;font-size:14px;opacity:0.4">Church Signage v1.0</p>
+    </div>
+
+    <div v-else-if="!currentItem" class="player-empty">
+        No content to display
+    </div>
+
+    <transition v-else :name="getTransition()">
+        <div class="player-item" :key="currentIndex">
+            <img v-if="currentItem.media_type === 'image' || currentItem.media_type === 'gif'"
+                 :src="currentItem.url"
+                 :alt="currentItem.media_name"
+                 @error="handleMediaError">
+
+            <video v-else-if="currentItem.media_type === 'video'"
+                   :src="currentItem.url"
+                   autoplay
+                   :key="currentIndex"
+                   @ended="handleVideoEnded"
+                   @error="handleMediaError"
+                   :style="{ '--dur': getDuration(currentItem) + 'ms' }">
+            </video>
+
+            <div v-else class="player-error">
+                <p>Unsupported media type: {{ currentItem.media_type }}</p>
+            </div>
+        </div>
+    </transition>
+
+    <div class="player-info" :class="{ error: error }">
+        <span v-if="deviceCode">{{ deviceCode }}</span>
+        <span v-if="currentIndex !== null && items.length > 0"> | {{ currentIndex + 1 }}/{{ items.length }}</span>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="js/player.js"></script>
+</body>
+</html>

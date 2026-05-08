@@ -1,0 +1,14 @@
+node_modules/
+tests/node_modules/
+php-error.log
+*.log
+session.txt
+*.session.php
+uploads/images/*
+uploads/videos/*
+uploads/gifs/*
+uploads/thumbnails/*
+!uploads/images/.gitkeep
+!uploads/videos/.gitkeep
+!uploads/gifs/.gitkeep
+!uploads/thumbnails/.gitkeep
