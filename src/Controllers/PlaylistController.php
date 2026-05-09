@@ -75,8 +75,8 @@ class PlaylistController
         }
 
         $stmt = $db->prepare(
-            'INSERT INTO playlists (name, default_duration, transition, transition_duration, bg_color, status)
-             VALUES (?, ?, ?, ?, ?, ?)'
+            'INSERT INTO playlists (name, default_duration, transition, transition_duration, bg_color, running_text, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             $name,
@@ -84,6 +84,7 @@ class PlaylistController
             $data['transition'] ?? 'fade',
             $data['transition_duration'] ?? 500,
             $data['bg_color'] ?? '#000000',
+            $data['running_text'] ?? null,
             $data['status'] ?? 'draft',
         ]);
 
@@ -105,7 +106,7 @@ class PlaylistController
         }
 
         $data = Helpers::getJsonBody();
-        $allowed = ['name', 'default_duration', 'transition', 'transition_duration', 'bg_color', 'status', 'start_date', 'end_date'];
+        $allowed = ['name', 'default_duration', 'transition', 'transition_duration', 'bg_color', 'running_text', 'status', 'start_date', 'end_date'];
         $dayFields = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
         $fields = [];
@@ -209,20 +210,27 @@ class PlaylistController
         $deviceIds = $data['device_ids'] ?? [];
         $groupId = $data['group_id'] ?? null;
         $isAll = $data['all_devices'] ?? false;
+        $timeStart = $data['time_start'] ?? null;
+        $timeEnd = $data['time_end'] ?? null;
+
+        $sqlExtra = '';
+        $paramsExtra = [];
+        if ($timeStart) { $sqlExtra .= ', time_start = ?'; $paramsExtra[] = $timeStart; }
+        if ($timeEnd) { $sqlExtra .= ', time_end = ?'; $paramsExtra[] = $timeEnd; }
 
         if ($isAll) {
             $db->prepare('DELETE FROM playlist_device WHERE playlist_id = ?')->execute([$params['id']]);
-            $db->prepare('INSERT INTO playlist_device (playlist_id, device_id, group_id, priority) VALUES (?, NULL, NULL, 0)')
-                ->execute([$params['id']]);
+            $stmt = $db->prepare("INSERT INTO playlist_device (playlist_id, device_id, group_id, priority, time_start, time_end) VALUES (?, NULL, NULL, 0, ?, ?)");
+            $stmt->execute([$params['id'], $timeStart, $timeEnd]);
         } elseif ($groupId) {
             $db->prepare('DELETE FROM playlist_device WHERE playlist_id = ?')->execute([$params['id']]);
-            $db->prepare('INSERT INTO playlist_device (playlist_id, group_id, priority) VALUES (?, ?, 0)')
-                ->execute([$params['id'], $groupId]);
+            $stmt = $db->prepare("INSERT INTO playlist_device (playlist_id, group_id, priority, time_start, time_end) VALUES (?, ?, 0, ?, ?)");
+            $stmt->execute([$params['id'], $groupId, $timeStart, $timeEnd]);
         } elseif (!empty($deviceIds)) {
             $db->prepare('DELETE FROM playlist_device WHERE playlist_id = ?')->execute([$params['id']]);
-            $insertStmt = $db->prepare('INSERT INTO playlist_device (playlist_id, device_id, priority) VALUES (?, ?, 0)');
+            $stmt = $db->prepare("INSERT INTO playlist_device (playlist_id, device_id, priority, time_start, time_end) VALUES (?, ?, 0, ?, ?)");
             foreach ($deviceIds as $did) {
-                $insertStmt->execute([$params['id'], $did]);
+                $stmt->execute([$params['id'], $did, $timeStart, $timeEnd]);
             }
         } else {
             Helpers::error('Specify device_ids, group_id, or all_devices');

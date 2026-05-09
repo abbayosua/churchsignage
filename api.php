@@ -62,6 +62,7 @@ $router->get('/api/device-groups', [DeviceController::class, 'groups']);
 $router->post('/api/player/register', [PlayerController::class, 'register']);
 $router->get('/api/player/{code}', [PlayerController::class, 'getPlaylist']);
 $router->post('/api/player/{code}/heartbeat', [PlayerController::class, 'heartbeat']);
+$router->get('/api/preview/{id}', [PlayerController::class, 'preview']);
 
 try {
     $router->dispatch();

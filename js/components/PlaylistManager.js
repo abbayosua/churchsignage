@@ -90,6 +90,10 @@ const PlaylistManager = {
                                         <input class="form-control form-control-color" type="color" v-model="editForm.bg_color" style="padding:2px;height:38px">
                                     </div>
                                     <div class="mb-3">
+                                        <label class="form-label small fw-semibold text-muted">Running Text <span class="text-muted fw-normal">(ayat berjalan)</span></label>
+                                        <input class="form-control" v-model="editForm.running_text" placeholder="e.g. Yohanes 3:16 - Kasih Allah..." maxlength="500">
+                                    </div>
+                                    <div class="mb-3">
                                         <label class="form-label small fw-semibold text-muted">Status</label>
                                         <select class="form-select" v-model="editForm.status">
                                             <option value="draft">Draft</option>
@@ -154,13 +158,33 @@ const PlaylistManager = {
                                             <option v-for="d in devices" :key="d.id" :value="d.id">{{ d.name }}</option>
                                         </select>
                                     </div>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col">
+                                            <label class="form-label small text-muted">Start Time</label>
+                                            <input class="form-control form-control-sm" type="time" v-model="assignTimeStart">
+                                        </div>
+                                        <div class="col">
+                                            <label class="form-label small text-muted">End Time</label>
+                                            <input class="form-control form-control-sm" type="time" v-model="assignTimeEnd">
+                                        </div>
+                                    </div>
                                     <button class="btn btn-primary btn-sm" @click="assignPlaylist" :disabled="!assignDeviceId || saving">
                                         {{ saving ? 'Assigning...' : 'Assign' }}
                                     </button>
                                     <div v-if="editing.assignments && editing.assignments.length > 0" class="mt-2 small text-muted">
                                         <i class="bi bi-check-circle text-success me-1"></i>
                                         Assigned to: {{ editing.assignments.map(a => a.device_name || 'All Devices').join(', ') }}
+                                        <span v-if="editing.assignments[0].time_start">
+                                            <br><i class="bi bi-clock me-1"></i>{{ editing.assignments[0].time_start?.slice(0,5) }} - {{ editing.assignments[0].time_end?.slice(0,5) }}
+                                        </span>
                                     </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="fw-semibold mb-2">Preview</h6>
+                                    <p class="small text-muted">Open this playlist in the player to preview how it looks.</p>
+                                    <button class="btn btn-outline-success btn-sm" @click="openPreview" :disabled="!editing.id">
+                                        <i class="bi bi-play-circle me-1"></i>Preview Playlist
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -174,7 +198,7 @@ const PlaylistManager = {
             playlists: [], loading: true,
             showCreate: false, newName: '', newDuration: 10, newTransition: 'fade',
             editing: null, editForm: {}, availableMedia: [], devices: [],
-            saving: false, dragStartIdx: -1, dragOverIdx: -1, assignDeviceId: '',
+            saving: false, dragStartIdx: -1, dragOverIdx: -1, assignDeviceId: '', assignTimeStart: '', assignTimeEnd: '',
         };
     },
     async created() { await this.loadPlaylists(); },
@@ -209,10 +233,12 @@ const PlaylistManager = {
                     api.get('/devices'),
                 ]);
                 this.editing = playlistRes.data;
-                this.editForm = { name: this.editing.name, default_duration: this.editing.default_duration, bg_color: this.editing.bg_color || '#000000', status: this.editing.status };
+                this.editForm = { name: this.editing.name, default_duration: this.editing.default_duration, bg_color: this.editing.bg_color || '#000000', running_text: this.editing.running_text || '', status: this.editing.status };
                 this.availableMedia = mediaRes.data.items;
                 this.devices = deviceRes.data;
                 this.assignDeviceId = '';
+                this.assignTimeStart = '';
+                this.assignTimeEnd = '';
             } catch (e) { alert('Error: ' + e.message); }
         },
         closeEditor() { this.editing = null; this.editForm = {}; this.loadPlaylists(); },
@@ -246,11 +272,18 @@ const PlaylistManager = {
             this.saving = true;
             try {
                 const payload = this.assignDeviceId === 'all' ? { all_devices: true } : { device_ids: [parseInt(this.assignDeviceId)] };
+                if (this.assignTimeStart) payload.time_start = this.assignTimeStart;
+                if (this.assignTimeEnd) payload.time_end = this.assignTimeEnd;
                 await api.post('/playlists/' + this.editing.id + '/assign', payload);
                 const res = await api.get('/playlists/' + this.editing.id);
                 this.editing.assignments = res.data.assignments;
             } catch (e) { alert('Error: ' + e.message); }
             finally { this.saving = false; }
+        },
+        openPreview() {
+            if (!this.editing || !this.editing.id) return;
+            const base = window.location.pathname.replace(/\/[^/]*$/, '');
+            window.open(base + '/player.html?preview=' + this.editing.id, '_blank');
         }
     }
 };

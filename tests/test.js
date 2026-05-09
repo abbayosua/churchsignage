@@ -243,7 +243,59 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
             check(!!hasYt, 'YouTube video confirmed in playlist items');
         }
 
-        // 12. Logout
+        // 12. Running Text
+        console.log('\n── Running Text ──');
+        try {
+            const playlistsRes2 = await api('GET', '/playlists');
+            if (playlistsRes2.data && playlistsRes2.data.length > 0) {
+                const plId = playlistsRes2.data[0].id;
+                const updateRes = await api('PUT', '/playlists/' + plId, {
+                    running_text: 'Test ayat berjalan - Yohanes 3:16',
+                });
+                check(updateRes.success, 'Running text saved to playlist');
+
+                const plDetail2 = await api('GET', '/playlists/' + plId);
+                check(plDetail2.data.running_text === 'Test ayat berjalan - Yohanes 3:16', 'Running text read back correctly');
+            }
+        } catch (e) {
+            check(false, 'Running text test failed: ' + e.message);
+        }
+
+        // 13. Playlist Preview API
+        console.log('\n── Playlist Preview ──');
+        try {
+            const playlistsRes3 = await api('GET', '/playlists');
+            if (playlistsRes3.data && playlistsRes3.data.length > 0) {
+                const previewRes = await api('GET', '/preview/' + playlistsRes3.data[0].id);
+                check(previewRes.success, 'Preview API returns playlist items');
+                check(Array.isArray(previewRes.data.items), 'Preview has items array');
+                check(!!previewRes.data.playlist.running_text, 'Preview includes running_text');
+            }
+        } catch (e) {
+            check(false, 'Preview API failed: ' + e.message);
+        }
+
+        // 14. Time Scheduling Assignment
+        console.log('\n── Time Scheduling ──');
+        try {
+            const plRes = await api('GET', '/playlists');
+            if (plRes.data && plRes.data.length > 0) {
+                const assignRes = await api('POST', '/playlists/' + plRes.data[0].id + '/assign', {
+                    all_devices: true,
+                    time_start: '08:00',
+                    time_end: '17:00',
+                });
+                check(assignRes.success, 'Playlist assigned with time range');
+
+                const plDetail3 = await api('GET', '/playlists/' + plRes.data[0].id);
+                const hasTime = plDetail3.data.assignments && plDetail3.data.assignments.some(a => a.time_start);
+                check(!!hasTime, 'Assignment includes time_start/time_end');
+            }
+        } catch (e) {
+            check(false, 'Time scheduling test failed: ' + e.message);
+        }
+
+        // 15. Logout
         console.log('\n── Logout ──');
         if (await page.locator('.sidebar').isVisible().catch(() => false)) {
             const logoutBtn = page.locator('.sidebar .btn-link', { hasText: 'Logout' });

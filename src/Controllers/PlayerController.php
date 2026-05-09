@@ -37,7 +37,8 @@ class PlayerController
              AND p.$dayName = 1
              AND pd.is_active = 1
              AND (pd.device_id = ? OR pd.device_id IS NULL)
-             AND pd.is_active = 1
+             AND (pd.time_start IS NULL OR pd.time_start <= CURTIME())
+             AND (pd.time_end IS NULL OR pd.time_end >= CURTIME())
              ORDER BY pd.priority DESC
              LIMIT 1"
         );
@@ -52,6 +53,8 @@ class PlayerController
             ], 'No active playlist');
             return;
         }
+
+        $runningText = $playlist['running_text'] ?? null;
 
         $stmt = $db->prepare(
             'SELECT pi.*, m.name as media_name, m.type as media_type, m.mime, m.filename,
@@ -69,9 +72,47 @@ class PlayerController
             $item['url'] = Helpers::getUploadsUrl() . '/' . self::typeFolder($item['media_type']) . '/' . $item['filename'];
         }
 
+        $playlist['running_text'] = $runningText;
+
         Helpers::success([
             'playlist' => $playlist,
             'device' => self::formatDevice($device),
+            'items' => $items,
+        ]);
+    }
+
+    public static function preview(array $params): void
+    {
+        $db = Database::getInstance();
+        $stmt = $db->prepare('SELECT * FROM playlists WHERE id = ?');
+        $stmt->execute([$params['id']]);
+        $playlist = $stmt->fetch();
+
+        if (!$playlist) {
+            Helpers::error('Playlist not found', 404);
+            return;
+        }
+
+        $stmt = $db->prepare(
+            'SELECT pi.*, m.name as media_name, m.type as media_type, m.mime, m.filename,
+                    m.width, m.height, m.duration as media_duration
+             FROM playlist_items pi
+             JOIN media m ON m.id = pi.media_id
+             WHERE pi.playlist_id = ?
+             ORDER BY pi.sort_order ASC'
+        );
+        $stmt->execute([$params['id']]);
+        $items = $stmt->fetchAll();
+
+        foreach ($items as &$item) {
+            $item['url'] = match ($item['media_type']) {
+                'youtube' => "https://www.youtube.com/embed/{$item['filename']}?autoplay=1&enablejsapi=1",
+                default => Helpers::getUploadsUrl() . '/' . self::typeFolder($item['media_type']) . '/' . $item['filename'],
+            };
+        }
+
+        Helpers::success([
+            'playlist' => $playlist,
             'items' => $items,
         ]);
     }

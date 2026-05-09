@@ -35,7 +35,8 @@ createApp({
         const currentIndex = ref(0);
         const error = ref('');
         const deviceInfo = ref(null);
-        const isYtPlaying = ref(false);
+        const runningText = ref('');
+        const previewMode = ref(false);
 
         const baseUrl = window.location.pathname.replace(/\/[^/]*$/, '');
 
@@ -98,6 +99,29 @@ createApp({
                 deviceInfo.value = json.data.device;
                 playlist.value = json.data.playlist;
                 items.value = json.data.items || [];
+                runningText.value = json.data.playlist?.running_text || '';
+                state.value = 'playing';
+                scheduleNext();
+            } catch (e) {
+                error.value = 'Connection error: ' + e.message;
+                state.value = 'error';
+            }
+        }
+
+        async function fetchPreview(plId) {
+            state.value = 'loading';
+            try {
+                const res = await fetch(baseUrl + '/api/preview/' + encodeURIComponent(plId));
+                const json = await res.json();
+                if (!json.success) {
+                    error.value = json.message || 'Failed to load preview';
+                    state.value = 'error';
+                    return;
+                }
+                previewMode.value = true;
+                playlist.value = json.data.playlist;
+                items.value = json.data.items || [];
+                runningText.value = json.data.playlist?.running_text || '';
                 state.value = 'playing';
                 scheduleNext();
             } catch (e) {
@@ -121,7 +145,6 @@ createApp({
 
         function nextItem() {
             destroyYtPlayer();
-            isYtPlaying.value = false;
             if (items.value.length === 0) return;
             currentIndex.value = (currentIndex.value + 1) % items.value.length;
             scheduleNext();
@@ -150,6 +173,9 @@ createApp({
             heartbeatTimer = setInterval(async () => {
                 try { await fetch(baseUrl + '/api/player/' + encodeURIComponent(code) + '/heartbeat', { method: 'POST' }); } catch (e) {}
             }, 30000);
+            if (!previewMode.value) {
+                refreshTimer = setInterval(() => { fetchPlaylist(code); }, 60000);
+            }
         }
 
         async function requestFullscreen() {
@@ -159,7 +185,6 @@ createApp({
         watch(currentIndex, () => {
             const item = currentItem.value;
             if (item && item.media_type === 'youtube') {
-                isYtPlaying.value = true;
                 nextTick(() => {
                     const videoId = item.filename;
                     const container = document.getElementById('youtube-player');
@@ -176,19 +201,21 @@ createApp({
                         container.innerHTML = '<iframe src="https://www.youtube.com/embed/' + videoId + '?autoplay=1&controls=0&modestbranding=1&rel=0&enablejsapi=1" class="w-100 h-100" allow="autoplay; encrypted-media" allowfullscreen style="border:0"></iframe>';
                         const iframe = container.querySelector('iframe');
                         if (iframe) {
-                            iframe.onload = () => {
-                                setTimeout(() => { handleYtEnded(); }, getDuration(item));
-                            };
+                            iframe.onload = () => setTimeout(() => { handleYtEnded(); }, getDuration(item));
                         }
                     }
                 });
-            } else {
-                isYtPlaying.value = false;
             }
         });
 
         onMounted(() => {
             loadYtApi();
+            const params = new URLSearchParams(window.location.search);
+            const previewId = params.get('preview');
+            if (previewId) {
+                fetchPreview(previewId);
+                return;
+            }
             const code = getDeviceCode();
             const name = localStorage.getItem('device_name') || '';
             if (code) {
@@ -212,7 +239,7 @@ createApp({
 
         return {
             state, deviceCode, deviceName, registerName, registerError, registering, registerSuccess,
-            currentItem, currentIndex, items, playlist, error, deviceInfo, getTransition, isYtPlaying,
+            currentItem, currentIndex, items, playlist, error, deviceInfo, getTransition, runningText, previewMode,
             handleVideoEnded, handleMediaError, doRegister,
         };
     },
